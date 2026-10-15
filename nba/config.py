@@ -2,6 +2,7 @@
 
 from dataclasses import asdict, dataclass
 from datetime import datetime
+from math import isfinite
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -31,6 +32,16 @@ class ModelConfig:
     max_roster_adjustment: float = 8.0
     player_shrinkage_minutes: float = 750.0
     preseason_weight: float = 0.0
+
+    def __post_init__(self):
+        positive = (self.half_life_days, self.team_penalty, self.rest_penalty,
+                    self.min_history_games, self.max_roster_adjustment, self.player_shrinkage_minutes)
+        if any(not isfinite(value) or value <= 0 for value in positive):
+            raise ValueError("Model history, half-life, penalties, and prior strengths must be finite and positive.")
+        if not isfinite(self.roster_blend) or not 0 <= self.roster_blend <= 1:
+            raise ValueError("Roster blend must be within [0, 1].")
+        if self.preseason_weight != 0:
+            raise ValueError("Preseason results are currently context-only; the core weight is zero.")
 
     def to_dict(self):
         return asdict(self)

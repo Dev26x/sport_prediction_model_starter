@@ -1,4 +1,4 @@
-"""Download four seasons of results, career box totals, and dated rosters."""
+"""Download four seasons of results, dated game boxes, and current rosters."""
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -26,7 +26,7 @@ def parallel_map(function, values, workers=4):
                 results.append((tasks[task], task.result()))
             except (DataAccessError, ValueError, KeyError) as error:
                 failures.append({"item": str(tasks[task]), "error": str(error)})
-            if index % 50 == 0 or index == len(tasks):
+            if index % 250 == 0 or index == len(tasks):
                 print(f"  {index}/{len(tasks)} requests processed; {len(failures)} failures", flush=True)
     return results, failures
 
@@ -59,6 +59,7 @@ def parse_event(event, season_year, season_type):
         "away_points": score(away) if completed else np.nan,
         "completed": completed,
         "neutral": bool(competition.get("neutralSite", False)),
+        "cup_final": competition.get("type", {}).get("abbreviation") == "CC",
     }
 
 
@@ -116,6 +117,7 @@ def sync_public(as_of=None, target_year=TARGET_YEAR, workers=4, refresh=False):
     cutoff = pd.Timestamp(as_of, tz="America/Toronto") + pd.Timedelta(days=1)
     years = tuple(range(target_year - 4, target_year))
     client = JsonClient(DATA / "raw/espn", refresh=refresh)
+    live_client = JsonClient(DATA / "raw/espn", refresh=refresh, max_cache_age_seconds=3600)
     DATA.mkdir(parents=True, exist_ok=True)
     teams_payload = client.get(f"{SITE}/teams", {"limit": 1000})
     team_rows = teams_payload["data"]["sports"][0]["leagues"][0]["teams"]
@@ -130,7 +132,8 @@ def sync_public(as_of=None, target_year=TARGET_YEAR, workers=4, refresh=False):
 
     def schedule(job):
         team_id, year, kind = job
-        return client.get(f"{SITE}/teams/{team_id}/schedule", {"season": year, "seasontype": kind})
+        source = live_client if year == target_year else client
+        return source.get(f"{SITE}/teams/{team_id}/schedule", {"season": year, "seasontype": kind})
 
     schedules, failures = parallel_map(schedule, jobs, workers)
     games, names = [], {}
@@ -151,14 +154,14 @@ def sync_public(as_of=None, target_year=TARGET_YEAR, workers=4, refresh=False):
         raise ValueError("Two team schedules disagree on a fixture or its score.")
     games = games.drop_duplicates("game_id").sort_values(["date", "game_id"])
     dates = pd.to_datetime(games.date, utc=True)
-    historical = games.loc[games.season.isin(years) & games.season_type.eq(2) & games.completed & dates.lt(cutoff)]
+    historical = games.loc[games.season.isin(years) & games.season_type.eq(2) & ~games.cup_final & games.completed & dates.lt(cutoff)]
     if historical.empty or (historical.home_points == historical.away_points).any():
         raise ValueError("Historical results are empty or contain final tied NBA scores.")
     historical.to_csv(DATA / "games.csv", index=False)
-    games.loc[games.season.eq(target_year) & games.season_type.eq(2)].to_csv(DATA / "schedule.csv", index=False)
+    games.loc[games.season.eq(target_year) & games.season_type.eq(2) & ~games.cup_final].to_csv(DATA / "schedule.csv", index=False)
     games.loc[games.season.eq(target_year) & games.season_type.eq(1) & games.completed & dates.lt(cutoff)].to_csv(DATA / "preseason.csv", index=False)
     print("Downloading current roster snapshots...", flush=True)
-    rosters, roster_failures = parallel_map(lambda team: client.get(f"{SITE}/teams/{team}/roster"), teams.team_id.tolist(), workers)
+    rosters, roster_failures = parallel_map(lambda team: live_client.get(f"{SITE}/teams/{team}/roster"), teams.team_id.tolist(), workers)
     failures.extend(roster_failures)
     roster_rows = []
     for team_id, snapshot in rosters:
@@ -183,36 +186,31 @@ def sync_public(as_of=None, target_year=TARGET_YEAR, workers=4, refresh=False):
         raise ValueError("No current rosters available.")
     if roster.duplicated(["player_id"]).any():
         raise ValueError("A player is listed on multiple current NBA rosters.")
+    print("Downloading current projected depth charts...", flush=True)
+    depth_responses, depth_failures = parallel_map(lambda team: live_client.get(f"{SITE}/teams/{team}/depthcharts"), teams.team_id.tolist(), workers)
+    failures.extend(depth_failures)
+    depth_rows = []
+    for team_id, snapshot in depth_responses:
+        for chart in snapshot["data"].get("depthchart", []):
+            for position, value in chart.get("positions", {}).items():
+                for rank, athlete in enumerate(value.get("athletes", []), 1):
+                    depth_rows.append({"team_id": str(team_id), "player_id": str(athlete["id"]), "position": position.upper(),
+                                       "depth_rank": rank, "snapshot_at": snapshot["fetched_at"], "source_url": snapshot["source_url"]})
+    depth = pd.DataFrame(depth_rows)
+    if depth.empty:
+        raise ValueError("Current projected depth charts are unavailable.")
+    depth.to_csv(DATA / "depthcharts.csv", index=False)
+    depth_summary = depth.groupby(["team_id", "player_id"], as_index=False).agg(
+        depth_rank=("depth_rank", "min"), depth_positions=("position", lambda value: ",".join(sorted(set(value)))),
+        depth_snapshot_at=("snapshot_at", "max"))
+    roster = roster.merge(depth_summary, on=["team_id", "player_id"], how="left", validate="one_to_one")
     roster.to_csv(DATA / "rosters.csv", index=False)
     archive = DATA / "snapshots" / f"rosters_{as_of}.csv"
     archive.parent.mkdir(parents=True, exist_ok=True)
     roster.to_csv(archive, index=False)
-    print("Discovering all athletes in the four historical seasons...", flush=True)
-    player_ids = set(roster.player_id)
-    for year in years:
-        first = client.get(f"{CORE}/seasons/{year}/athletes", {"limit": 1000})["data"]
-        pages = [first]
-        pages.extend(client.get(f"{CORE}/seasons/{year}/athletes", {"limit": 1000, "page": page})["data"]
-                     for page in range(2, int(first.get("pageCount", 1)) + 1))
-        for page in pages:
-            for player in page.get("items", []):
-                match = re.search(r"/athletes/(\d+)", player["$ref"])
-                if match:
-                    player_ids.add(match.group(1))
-    print(f"Downloading career totals for {len(player_ids)} players...", flush=True)
-    careers, career_failures = parallel_map(lambda player: client.get(f"{CAREER}/{player}/stats"), sorted(player_ids), workers)
-    failures.extend(career_failures)
-    player_rows, no_history = [], []
-    for player_id, snapshot in careers:
-        rows = parse_career(player_id, snapshot["data"], names, years)
-        if rows:
-            player_rows.extend(rows)
-        else:
-            no_history.append(player_id)
-    players = pd.DataFrame(player_rows)
-    if players.empty:
-        raise ValueError("No historical player performance data available.")
-    players.to_csv(DATA / "player_seasons.csv", index=False)
+    players, box_failures = sync_boxscores(client, historical, workers)
+    failures.extend(box_failures)
+    no_history = sorted(set(roster.player_id) - set(players.player_id))
     game_counts = historical.groupby("season").size().to_dict()
     team_counts = pd.concat([historical[["season", "home_team_id"]].rename(columns={"home_team_id": "team_id"}),
                             historical[["season", "away_team_id"]].rename(columns={"away_team_id": "team_id"})]).groupby(["season", "team_id"]).size()
@@ -220,16 +218,124 @@ def sync_public(as_of=None, target_year=TARGET_YEAR, workers=4, refresh=False):
         "as_of": as_of, "target_season": season_label(target_year), "history_seasons": [season_label(y) for y in years],
         "source": "ESPN public JSON feeds (undocumented; cached with URLs and retrieval timestamps)",
         "created_at": datetime.now(timezone.utc).isoformat(), "games_by_season": {str(k): int(v) for k, v in game_counts.items()},
-        "regular_season_complete": all(game_counts.get(year) == 1230 for year in years) and len(team_counts) == 120 and team_counts.eq(82).all(),
+        "regular_season_complete": bool(all(game_counts.get(year) == 1230 for year in years) and len(team_counts) == 120 and team_counts.eq(82).all()),
         "roster_teams": int(roster.team_id.nunique()), "roster_players": len(roster), "player_season_stints": len(players),
-        "historical_players": int(players.player_id.nunique()), "requested_players": len(player_ids),
+        "depth_chart_teams": int(depth.team_id.nunique()),
+        "historical_players": int(players.player_id.nunique()), "player_history_source": "Dated historical game boxes, including departed and retired players",
         "players_without_history": no_history, "failures": failures,
         "preseason_games": int((games.season.eq(target_year) & games.season_type.eq(1) & games.completed & dates.lt(cutoff)).sum()),
         "future_schedule_games": int((games.season.eq(target_year) & games.season_type.eq(2)).sum()),
         "roster_note": "Current training-camp roster snapshot, not a confirmed opening-night active lineup. Availability is an editable scenario assumption.",
     }
+    audit = pd.read_csv(DATA / "boxscore_audit.csv")
+    quality["player_boxes_with_unassigned_points"] = len(audit)
+    quality["unassigned_player_points"] = float(audit.unassigned_team_points.sum())
+    quality["player_box_source_gap_note"] = "Some archived team boxes contain an unidentified player slot. Unassigned points are preserved in boxscore_audit.csv, not imputed to players."
     (DATA / "data_quality.json").write_text(json.dumps(quality, indent=2, default=lambda value: bool(value)) + "\n")
     print(json.dumps({k: v for k, v in quality.items() if k not in ("players_without_history", "failures")}, indent=2), flush=True)
     if failures:
         print(f"Recorded {len(failures)} download failures in data_quality.json; do not treat coverage as complete.")
     return quality
+
+
+def parse_boxscore(game, payload):
+    if str(payload.get("header", {}).get("id")) != str(game.game_id):
+        raise ValueError("Box-score event ID does not match the requested historical game.")
+    rows = []
+    team_ids = {str(game.home_team_id), str(game.away_team_id)}
+    actual_teams = set()
+    stat_map = {"points": "points", "offensiveRebounds": "oreb", "defensiveRebounds": "dreb",
+                "assists": "ast", "steals": "stl", "blocks": "blk", "turnovers": "tov"}
+    pairs = {"fieldGoalsMade-fieldGoalsAttempted": ("fgm", "fga"),
+             "freeThrowsMade-freeThrowsAttempted": ("ftm", "fta"),
+             "threePointFieldGoalsMade-threePointFieldGoalsAttempted": ("fg3m", "fg3a")}
+    for team in payload.get("boxscore", {}).get("players", []):
+        team_id = str(team["team"]["id"])
+        actual_teams.add(team_id)
+        team_points = 0
+        unidentified = False
+        aggregate_points = None
+        for table in team.get("statistics", []):
+            keys = table.get("keys", [])
+            aggregate_points = dict(zip(keys, table.get("totals", []))).get("points")
+            for athlete in table.get("athletes", []):
+                if athlete.get("didNotPlay") or not athlete.get("stats"):
+                    continue
+                stats = dict(zip(keys, athlete["stats"]))
+                unidentified = unidentified or not athlete.get("athlete", {}).get("id")
+                minutes = str(stats.get("minutes", "0"))
+                if minutes in ("--", "", "DNP"):
+                    # ESPN occasionally marks an unused bench entry as played.
+                    # Omit it only when every displayed production stat is zero;
+                    # missing minutes alongside actual production still fails.
+                    production = [value for key, value in stats.items() if key != "minutes"]
+                    if all(str(value) in ("0", "0-0", "+0", "-0", "--") for value in production):
+                        continue
+                    raise ValueError(f"Missing minutes alongside nonzero player production in game {game.game_id}.")
+                if ":" in minutes:
+                    minute, second = minutes.split(":")
+                    minute_value = float(minute) + float(second) / 60
+                else:
+                    minute_value = float(minutes)
+                record = {"game_id": str(game.game_id), "date": game.date, "season": int(game.season),
+                          "team_id": team_id, "player_id": str(athlete["athlete"]["id"]),
+                          "player_name": athlete["athlete"]["displayName"], "games": 1,
+                          "minutes": minute_value, "starter": bool(athlete.get("starter")),
+                          "unassigned_team_points": 0.0,
+                          "plus_minus": float(stats["plusMinus"]) if stats.get("plusMinus") not in (None, "--", "") else np.nan,
+                          "minutes_precision": "game-box displayed minutes"}
+                for source, destination in stat_map.items():
+                    record[destination] = float(stats[source])
+                for source, destinations in pairs.items():
+                    made, attempted = str(stats[source]).split("-")
+                    record[destinations[0]], record[destinations[1]] = float(made), float(attempted)
+                team_points += record["points"]
+                rows.append(record)
+        expected = game.home_points if team_id == str(game.home_team_id) else game.away_points
+        if team_points != expected:
+            # A few archived Chicago boxes contain an anonymous zero-stat slot.
+            # Preserve this source gap separately. Never attribute its missing
+            # points to a named player or alter the official final team score.
+            if not unidentified or aggregate_points is None or float(aggregate_points) != expected or team_points > expected:
+                raise ValueError(f"Player box totals disagree with final team points for game {game.game_id}, team {team_id}.")
+            for record in rows:
+                if record["team_id"] == team_id:
+                    record["unassigned_team_points"] = float(expected - team_points)
+    if actual_teams != team_ids or not rows:
+        raise ValueError("Historical box score is incomplete or has different teams.")
+    return rows
+
+
+def sync_boxscores(client, games, workers=4):
+    print(f"Downloading dated box scores for {len(games)} regular-season games...", flush=True)
+    game_map = {str(row.game_id): row for row in games.itertuples()}
+
+    def fetch(game_id):
+        payload = client.get(f"{SITE}/summary", {"event": game_id})["data"]
+        return parse_boxscore(game_map[game_id], payload)
+
+    responses, failures = parallel_map(fetch, sorted(game_map), workers)
+    if failures:
+        # Preserve the failure manifest, but never overwrite a complete training
+        # table with a partial download that could bias the player model.
+        (DATA / "boxscore_download_failures.json").write_text(json.dumps(failures, indent=2) + "\n")
+        raise ValueError(f"{len(failures)} historical game boxes failed validation. Cached successes are retained; rerun sync to retry.")
+    rows = [row for _, box in responses for row in box]
+    frame = pd.DataFrame(rows).sort_values(["date", "game_id", "team_id", "player_id"])
+    if frame.duplicated(["game_id", "player_id"]).any():
+        raise ValueError("Duplicate player/game box rows.")
+    frame.to_csv(DATA / "player_games.csv", index=False)
+    audit = frame.loc[frame.unassigned_team_points.ne(0), ["game_id", "team_id", "unassigned_team_points"]].drop_duplicates()
+    audit.to_csv(DATA / "boxscore_audit.csv", index=False)
+    totals = ["games", "minutes", "points", "oreb", "dreb", "ast", "stl", "blk", "tov", "fgm", "fga", "ftm", "fta", "fg3m", "fg3a", "plus_minus"]
+    stints = frame.groupby(["player_id", "season", "team_id"], as_index=False)[totals].sum()
+    display_names = frame.groupby("player_id").player_name.last().to_dict()
+    stints["player_name"] = stints.player_id.map(display_names)
+    stints["minutes_precision"] = "sum of game-box displayed minutes"
+    if stints.minutes.le(0).any():
+        # A fringe player can appear for less than one displayed minute across
+        # the whole season. Preserve the game row; exclude a zero-minute rate.
+        stints = stints.loc[stints.minutes > 0].copy()
+    stints.to_csv(DATA / "player_seasons.csv", index=False)
+    (DATA / "boxscore_download_failures.json").write_text("[]\n")
+    return stints, failures

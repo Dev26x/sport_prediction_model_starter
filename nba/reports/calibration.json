@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "scope": "team_margin_probability_scale",
+  "sigma_scale": 0.73724261462587,
+  "model_config": {
+    "half_life_days": 365.0,
+    "team_penalty": 35.0,
+    "rest_penalty": 100.0,
+    "min_history_games": 300,
+    "roster_blend": 0.5,
+    "max_roster_adjustment": 8.0,
+    "player_shrinkage_minutes": 750.0,
+    "preseason_weight": 0.0
+  },
+  "calibration_games": 1230,
+  "calibration_last_result": "2025-04-13",
+  "fitted_before": "2025-10-01"
+}

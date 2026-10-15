@@ -8,49 +8,41 @@
     "2025-26"
   ],
   "source": "ESPN public JSON feeds (undocumented; cached with URLs and retrieval timestamps)",
-  "created_at": "2026-10-15T04:25:37.767428+00:00",
+  "created_at": "2026-10-15T04:46:25.956862+00:00",
   "games_by_season": {
     "2023": 1230,
-    "2024": 1231,
-    "2025": 1231,
-    "2026": 1231
+    "2024": 1230,
+    "2025": 1230,
+    "2026": 1230
   },
-  "regular_season_complete": false,
+  "regular_season_complete": true,
   "roster_teams": 30,
   "roster_players": 627,
-  "player_season_stints": 1930,
-  "historical_players": 581,
-  "requested_players": 737,
+  "player_season_stints": 2580,
+  "depth_chart_teams": 30,
+  "historical_players": 877,
+  "player_history_source": "Dated historical game boxes, including departed and retired players",
   "players_without_history": [
     "2995706",
     "3155937",
     "3904625",
-    "401",
     "4065813",
-    "4066486",
     "4277923",
     "4278395",
     "4278729",
     "4279143",
     "4395667",
-    "4395671",
     "4395997",
-    "4396951",
     "4397003",
     "4397355",
     "4398257",
     "4398356",
-    "4431691",
-    "4431763",
-    "4432189",
     "4432586",
     "4432737",
     "4432753",
-    "4432916",
     "4432976",
     "4433138",
     "4433176",
-    "4433183",
     "4433599",
     "4565698",
     "4588201",
@@ -71,14 +63,10 @@
     "4701819",
     "4702049",
     "4702099",
-    "4702528",
     "4702784",
     "4703115",
     "4703396",
     "4704043",
-    "4707776",
-    "4710770",
-    "4712845",
     "4712862",
     "4712902",
     "4837238",
@@ -89,13 +77,13 @@
     "4873090",
     "4873153",
     "4897155",
-    "4897438",
     "4897471",
     "4897504",
     "4897696",
     "4898010",
     "4898260",
     "4917149",
+    "4997530",
     "5037878",
     "5041935",
     "5041951",
@@ -113,9 +101,6 @@
     "5105411",
     "5105555",
     "5105571",
-    "5105462",
-    "5105589",
-    "5105598",
     "5105626",
     "5105800",
     "5105809",
@@ -130,18 +115,13 @@
     "5106058",
     "5106261",
     "5106262",
-    "5106272",
     "5106270",
+    "5106272",
     "5106283",
     "5107157",
-    "5106674",
-    "5107242",
     "5107251",
-    "5106293",
     "5107258",
     "5107968",
-    "5107264",
-    "5108969",
     "5109790",
     "5113969",
     "5114350",
@@ -149,96 +129,27 @@
     "5142620",
     "5142621",
     "5142718",
+    "5148538",
     "5149077",
     "5149115",
     "5164559",
+    "5170949",
     "5174983",
     "5175737",
-    "5182573",
+    "5214989",
+    "5231919",
     "5241364",
     "5254165",
     "5258459",
-    "5281370"
+    "5279129",
+    "5281370",
+    "5457832"
   ],
-  "failures": [
-    {
-      "item": "4997530",
-      "error": "HTTP 404 from site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/4997530/stats."
-    },
-    {
-      "item": "5148538",
-      "error": "HTTP 404 from site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/5148538/stats."
-    },
-    {
-      "item": "5170949",
-      "error": "HTTP 404 from site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/5170949/stats."
-    },
-    {
-      "item": "5184016",
-      "error": "HTTP 404 from site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/5184016/stats."
-    },
-    {
-      "item": "52131",
-      "error": "HTTP 404 from site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/52131/stats."
-    },
-    {
-      "item": "5214989",
-      "error": "HTTP 404 from site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/5214989/stats."
-    },
-    {
-      "item": "5231919",
-      "error": "HTTP 404 from site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/5231919/stats."
-    },
-    {
-      "item": "5234862",
-      "error": "HTTP 404 from site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/5234862/stats."
-    },
-    {
-      "item": "5279129",
-      "error": "HTTP 404 from site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/5279129/stats."
-    },
-    {
-      "item": "5358755",
-      "error": "HTTP 404 from site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/5358755/stats."
-    },
-    {
-      "item": "5363895",
-      "error": "HTTP 404 from site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/5363895/stats."
-    },
-    {
-      "item": "5323934",
-      "error": "HTTP 404 from site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/5323934/stats."
-    },
-    {
-      "item": "5402942",
-      "error": "HTTP 404 from site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/5402942/stats."
-    },
-    {
-      "item": "5440832",
-      "error": "HTTP 404 from site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/5440832/stats."
-    },
-    {
-      "item": "5367349",
-      "error": "HTTP 404 from site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/5367349/stats."
-    },
-    {
-      "item": "5443475",
-      "error": "HTTP 404 from site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/5443475/stats."
-    },
-    {
-      "item": "5443473",
-      "error": "HTTP 404 from site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/5443473/stats."
-    },
-    {
-      "item": "5443476",
-      "error": "HTTP 404 from site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/5443476/stats."
-    },
-    {
-      "item": "5457832",
-      "error": "HTTP 404 from site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/5457832/stats."
-    }
-  ],
+  "failures": [],
   "preseason_games": 52,
   "future_schedule_games": 1200,
-  "roster_note": "Current training-camp roster snapshot, not a confirmed opening-night active lineup. Availability is an editable scenario assumption."
+  "roster_note": "Current training-camp roster snapshot, not a confirmed opening-night active lineup. Availability is an editable scenario assumption.",
+  "player_boxes_with_unassigned_points": 7,
+  "unassigned_player_points": 28.0,
+  "player_box_source_gap_note": "Some archived team boxes contain an unidentified player slot. Unassigned points are preserved in boxscore_audit.csv, not imputed to players."
 }

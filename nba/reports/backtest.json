@@ -1,0 +1,267 @@
+{
+  "scope": "team-only walk-forward forecasts; current-roster adjustments are not validated by this backtest",
+  "model_config": {
+    "half_life_days": 365.0,
+    "team_penalty": 35.0,
+    "rest_penalty": 100.0,
+    "min_history_games": 300,
+    "roster_blend": 0.5,
+    "max_roster_adjustment": 8.0,
+    "player_shrinkage_minutes": 750.0,
+    "preseason_weight": 0.0
+  },
+  "seasons": {
+    "initial_history": "2022-23",
+    "development": "2023-24",
+    "calibration": "2024-25",
+    "test": "2025-26"
+  },
+  "calibration": {
+    "schema_version": 1,
+    "scope": "team_margin_probability_scale",
+    "sigma_scale": 0.73724261462587,
+    "model_config": {
+      "half_life_days": 365.0,
+      "team_penalty": 35.0,
+      "rest_penalty": 100.0,
+      "min_history_games": 300,
+      "roster_blend": 0.5,
+      "max_roster_adjustment": 8.0,
+      "player_shrinkage_minutes": 750.0,
+      "preseason_weight": 0.0
+    },
+    "calibration_games": 1230,
+    "calibration_last_result": "2025-04-13",
+    "fitted_before": "2025-10-01"
+  },
+  "test_games": 1230,
+  "metrics": {
+    "team_raw": {
+      "games": 1230,
+      "accuracy": 0.6308943089430894,
+      "brier": 0.2229768824497897,
+      "log_loss": 0.6369486712800639,
+      "margin_mae": 12.035974322032025,
+      "margin_rmse": 15.314099553906699
+    },
+    "team_calibrated": {
+      "games": 1230,
+      "accuracy": 0.6308943089430894,
+      "brier": 0.22191822378275342,
+      "log_loss": 0.6349192770318305,
+      "margin_mae": 12.035974322032025,
+      "margin_rmse": 15.314099553906699
+    },
+    "baseline": {
+      "games": 1230,
+      "accuracy": 0.5544715447154471,
+      "brier": 0.24708516627987379,
+      "log_loss": 0.6873070059310368
+    }
+  },
+  "calibrated_minus_baseline": {
+    "first": "calibrated_home_win",
+    "second": "baseline_home_win",
+    "games": 1230,
+    "match_dates": 164,
+    "mean_log_loss_difference": -0.05238772889920625,
+    "interval_95": [
+      -0.07180300593261175,
+      -0.032920333036342654
+    ]
+  },
+  "calibrated_minus_raw": {
+    "first": "calibrated_home_win",
+    "second": "raw_home_win",
+    "games": 1230,
+    "match_dates": 164,
+    "mean_log_loss_difference": -0.0020293942482334008,
+    "interval_95": [
+      -0.007489676573248229,
+      0.00359171379170781
+    ]
+  },
+  "opening_14_days": {
+    "team_calibrated": {
+      "games": 103,
+      "accuracy": 0.5631067961165048,
+      "brier": 0.23491538036836562,
+      "log_loss": 0.6649636066316834
+    },
+    "baseline": {
+      "games": 103,
+      "accuracy": 0.5728155339805825,
+      "brier": 0.24504064186461863,
+      "log_loss": 0.683200952640472
+    }
+  },
+  "reliability_bins": [
+    {
+      "model": "team_raw",
+      "bin_lower": 0.0,
+      "bin_upper": 0.1,
+      "games": 0,
+      "mean_probability": null,
+      "observed_home_win": null
+    },
+    {
+      "model": "team_raw",
+      "bin_lower": 0.1,
+      "bin_upper": 0.2,
+      "games": 3,
+      "mean_probability": 0.16832462076953514,
+      "observed_home_win": 0.0
+    },
+    {
+      "model": "team_raw",
+      "bin_lower": 0.2,
+      "bin_upper": 0.3,
+      "games": 26,
+      "mean_probability": 0.26957361593119644,
+      "observed_home_win": 0.038461538461538464
+    },
+    {
+      "model": "team_raw",
+      "bin_lower": 0.3,
+      "bin_upper": 0.4,
+      "games": 136,
+      "mean_probability": 0.359346141169651,
+      "observed_home_win": 0.3088235294117647
+    },
+    {
+      "model": "team_raw",
+      "bin_lower": 0.4,
+      "bin_upper": 0.5,
+      "games": 275,
+      "mean_probability": 0.4543505755785188,
+      "observed_home_win": 0.4727272727272727
+    },
+    {
+      "model": "team_raw",
+      "bin_lower": 0.5,
+      "bin_upper": 0.6,
+      "games": 341,
+      "mean_probability": 0.5472122702862836,
+      "observed_home_win": 0.5601173020527859
+    },
+    {
+      "model": "team_raw",
+      "bin_lower": 0.6,
+      "bin_upper": 0.7,
+      "games": 296,
+      "mean_probability": 0.6430364039502864,
+      "observed_home_win": 0.668918918918919
+    },
+    {
+      "model": "team_raw",
+      "bin_lower": 0.7,
+      "bin_upper": 0.8,
+      "games": 130,
+      "mean_probability": 0.739666808227665,
+      "observed_home_win": 0.7692307692307693
+    },
+    {
+      "model": "team_raw",
+      "bin_lower": 0.8,
+      "bin_upper": 0.9,
+      "games": 23,
+      "mean_probability": 0.8328593465778941,
+      "observed_home_win": 0.8695652173913043
+    },
+    {
+      "model": "team_raw",
+      "bin_lower": 0.9,
+      "bin_upper": 1.0,
+      "games": 0,
+      "mean_probability": null,
+      "observed_home_win": null
+    },
+    {
+      "model": "team_calibrated",
+      "bin_lower": 0.0,
+      "bin_upper": 0.1,
+      "games": 2,
+      "mean_probability": 0.08224410399978369,
+      "observed_home_win": 0.0
+    },
+    {
+      "model": "team_calibrated",
+      "bin_lower": 0.1,
+      "bin_upper": 0.2,
+      "games": 11,
+      "mean_probability": 0.1729182876823082,
+      "observed_home_win": 0.09090909090909091
+    },
+    {
+      "model": "team_calibrated",
+      "bin_lower": 0.2,
+      "bin_upper": 0.3,
+      "games": 66,
+      "mean_probability": 0.2590330788331069,
+      "observed_home_win": 0.22727272727272727
+    },
+    {
+      "model": "team_calibrated",
+      "bin_lower": 0.3,
+      "bin_upper": 0.4,
+      "games": 139,
+      "mean_probability": 0.3551761662061582,
+      "observed_home_win": 0.381294964028777
+    },
+    {
+      "model": "team_calibrated",
+      "bin_lower": 0.4,
+      "bin_upper": 0.5,
+      "games": 222,
+      "mean_probability": 0.4510799786581125,
+      "observed_home_win": 0.46846846846846846
+    },
+    {
+      "model": "team_calibrated",
+      "bin_lower": 0.5,
+      "bin_upper": 0.6,
+      "games": 260,
+      "mean_probability": 0.547666466155199,
+      "observed_home_win": 0.5269230769230769
+    },
+    {
+      "model": "team_calibrated",
+      "bin_lower": 0.6,
+      "bin_upper": 0.7,
+      "games": 259,
+      "mean_probability": 0.6489941001496733,
+      "observed_home_win": 0.6640926640926641
+    },
+    {
+      "model": "team_calibrated",
+      "bin_lower": 0.7,
+      "bin_upper": 0.8,
+      "games": 179,
+      "mean_probability": 0.7460237099539084,
+      "observed_home_win": 0.7374301675977654
+    },
+    {
+      "model": "team_calibrated",
+      "bin_lower": 0.8,
+      "bin_upper": 0.9,
+      "games": 81,
+      "mean_probability": 0.8405158870291882,
+      "observed_home_win": 0.7283950617283951
+    },
+    {
+      "model": "team_calibrated",
+      "bin_lower": 0.9,
+      "bin_upper": 1.0,
+      "games": 11,
+      "mean_probability": 0.9238115745523893,
+      "observed_home_win": 0.8181818181818182
+    }
+  ],
+  "notes": [
+    "Current roster snapshots and whole-season player totals are never fed into earlier game predictions.",
+    "Team parameters are fixed; sigma scale is fitted only on the earlier calibration season.",
+    "Date bootstrap intervals do not fully capture serial or team dependence.",
+    "No bookmaker or TheRundown data is used in this historical validation."
+  ],
+  "data_sha256": "fd176f2cc212b50d778a10a62ffe3762fa91d95a7231cca2c528003ab39c2dd0"
+}

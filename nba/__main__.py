@@ -19,6 +19,8 @@ def main():
     prices = commands.add_parser("rundown-events", help="Save a bounded current event/optional moneyline snapshot")
     prices.add_argument("--date", required=True)
     prices.add_argument("--books", type=int, nargs="+")
+    compare = commands.add_parser("compare-odds", help="Join a saved current TheRundown moneyline snapshot to model forecasts")
+    compare.add_argument("snapshot")
     build = commands.add_parser("build", help="Fit team/player models and create season preparation reports")
     build.add_argument("--as-of", default=local_today())
     build.add_argument("--target-year", type=int, default=TARGET_YEAR)
@@ -41,6 +43,9 @@ def main():
         elif args.command == "rundown-events":
             from .rundown import RundownClient
             print(json.dumps(RundownClient(refresh=True).snapshot_events(args.date, args.books), indent=2))
+        elif args.command == "compare-odds":
+            from .markets import compare_market
+            print(json.dumps(compare_market(args.snapshot), indent=2))
         elif args.command == "build":
             from .reporting import build_reports
             print(json.dumps(build_reports(args.as_of, args.target_year), indent=2))

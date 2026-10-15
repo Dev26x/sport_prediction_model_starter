@@ -26,11 +26,12 @@ class SameHostRedirect(HTTPRedirectHandler):
 
 
 class JsonClient:
-    def __init__(self, cache_dir, headers=None, timeout=20, retries=1, refresh=False):
+    def __init__(self, cache_dir, headers=None, timeout=20, retries=1, refresh=False, max_cache_age_seconds=None):
         self.cache_dir = Path(cache_dir)
         self.headers = {"User-Agent": "NBAResearchStarter/1.0", "Accept": "application/json", "Accept-Encoding": "gzip"}
         self.headers.update(headers or {})
         self.timeout, self.retries, self.refresh = timeout, retries, refresh
+        self.max_cache_age_seconds = max_cache_age_seconds
         self.opener = build_opener(SameHostRedirect())
 
     def _read(self, url):
@@ -70,7 +71,11 @@ class JsonClient:
         cache_key = hashlib.sha256(url.encode()).hexdigest()
         path = self.cache_dir / f"{cache_key}.json.gz"
         if path.exists() and not self.refresh:
-            return json.loads(gzip.decompress(path.read_bytes()))
+            cached = json.loads(gzip.decompress(path.read_bytes()))
+            fetched = datetime.fromisoformat(cached["fetched_at"])
+            age = (datetime.now(timezone.utc) - fetched).total_seconds()
+            if self.max_cache_age_seconds is None or age <= self.max_cache_age_seconds:
+                return cached
         for attempt in range(self.retries + 1):
             try:
                 raw, response_headers = self._read(url)
@@ -89,6 +94,7 @@ class JsonClient:
                 temporary.replace(path)
                 return payload
             except HTTPError as error:
+                error.close()
                 if error.code in (401, 403):
                     raise DataAccessError(f"HTTP {error.code}: authentication or data entitlement denied at {urlsplit(url).netloc}.") from None
                 if error.code not in (429, 500, 502, 503, 504) or attempt == self.retries:
