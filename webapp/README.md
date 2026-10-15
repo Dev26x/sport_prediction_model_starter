@@ -1,126 +1,81 @@
-# vinext-starter
+# Matchday web app
 
-A clean full-stack starter running on [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and Drizzle support.
+Private research dashboard for **NBA, NFL, NHL, EPL, La Liga and Serie A**. The date board shows model probabilities, available bookmaker quotes, model/market differences and per-selection explanations. It cannot place bets.
 
-## Prerequisites
+## View locally
 
-- Node.js `>=22.13.0`
-- Portable: Windows, macOS, or Linux; no Bash required
-- Managed Linux: managed Linux runtime with Bash, `flock`, `curl`, `sha256sum`, and GNU `timeout`
-- Git is required only for publishing
-
-## Sites Lifecycle
-
-The Sites initializer copies the shared starter and selects managed-linux only when `SITES_MANAGED_LINUX_CONTAINER=1`; otherwise it selects portable. It saves the selection only in ignored `.sites-runtime/execution-profile.json`. Both profiles copy/configure first, then use the plugin's separate `install-dependencies.mjs` step to measure installation independently. Edit source under `app/` and follow the Sites skill for installation, preview, builds, and publishing.
-
-Run `node <plugin-root>/scripts/configure-execution-profile.mjs` only when the profile is unknown for the current checkout and environment. Profile changes do not alter tracked source or require reinstalling otherwise-valid dependencies; restart an existing preview to use the new selection. Do not commit or upload `.sites-runtime/`.
-
-This starter does not use `wrangler.jsonc`.
-
-`install:ci` runs `npm ci` once against the shared lockfile, disables parent-workspace discovery, and includes required dev/optional dependencies despite production/omit settings. Sharp defaults to prebuilt binaries unless explicitly configured otherwise. Do not overlap installers.
-
-- **Portable:** Preserve host HOME, npm cache, registry, proxy, temporary paths, retry/concurrency settings, and lifecycle-script policy. Use `--prefer-offline --no-audit --no-fund`.
-- **Managed Linux:** Use the existing project-local HOME/cache/tmp setup and Linux install lock, tarball preflight, and timeout. Restore the image-seeded npm cache only when its lockfile hash matches; retain network fallback. Builds keep their existing timeout. These helpers are not invoked by the portable profile.
-
-`scripts/sites-env.mjs` preserves the caller's HOME, npm cache, proxy, XDG, and temporary-directory configuration while defaulting Wrangler and Miniflare state to the checkout. If npm reports an unwritable cache, select a writable path with `npm_config_cache` for that install. The `dev` and `start` scripts also keep Wrangler logs inside the checkout. Generated `.sites-runtime/` and `.wrangler/` directories are disposable and ignored by Git.
-
-On portable, `npm run dev` uses `vinext dev` with HMR, starting at port 5173. Vinext records the running server in ignored `.vinext/` state, rejects an ordinary duplicate launch, and recovers stale state after a stopped process; exactly simultaneous starts can race. Pass `--port <port>` or `--hostname <host>` after `npm run dev --` when needed; keep portable previews on loopback.
-
-For browser QA on managed Linux, use `sites-preview start`. The project's dev script runs Vite and accepts the supervisor's `--host 0.0.0.0 --port 4173 --strictPort` arguments. The internal browser uses `http://terminal.local:4173/`; it is not a user-facing URL. The supervisor owns the preview lifecycle. The ignored local profile survives the supervisor's cleared process environment.
-
-The portable profile simulates ChatGPT sign-in only for loopback development requests. Visit `/signin-with-chatgpt?return_to=/` to sign in as `local_seedy` (`seedy@sites.test`, display name `Seedy`) and `/signout-with-chatgpt?return_to=/` to sign out. The development cookie preserves that identity across server restarts. Mock auth is disabled in the managed-linux profile and is not included in production builds; hosted authentication remains dispatch-owned.
-
-The Worker uses `vinext/server/fetch-handler`, including Vinext's config-aware image handling. After building, `npm start` runs that Worker locally through Wrangler on `127.0.0.1`, sharing `.wrangler/state` with dev preview and local D1 migrations; it does not deploy the site or simulate sign-in. Use the URL printed by the server. Pass `npm start -- --port <port>` to select a different built-preview port.
-
-Local previews use Miniflare's placeholder `Request.cf` metadata without a network lookup. Set `CLOUDFLARE_CF_FETCH_ENABLED=true` to opt into fetching preview metadata; this setting does not change hosted request metadata.
-
-Local tool usage metrics are disabled by default. Set `WRANGLER_SEND_METRICS=true` to opt in.
-
-## Included Shape
-
-- edit site code under `app/`
-- `app/chatgpt-auth.ts` provides optional dispatch-owned ChatGPT sign-in helpers
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/index.ts` reads the D1 binding from the Cloudflare Worker environment
-- `db/schema.ts` starts intentionally empty
-- `@cloudflare/workers-types` provides Worker types; `cloudflare-env.d.ts` declares optional `DB`/`BUCKET` bindings—update these declarations if binding names change
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
-
-## Workspace Auth Headers
-
-Signed-in visitors receive both `oai-authenticated-user-id` and `oai-authenticated-user-email`. Private Sites require every visitor to sign in; public Sites may also have anonymous visitors, for whom neither header is present.
-
-The user ID is stable for the same user on the same Site and different across Sites. Use it as the durable user key; use email and name for display or contact purposes.
-
-SIWC-authenticated workspace sites may also receive `oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty `name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by `oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
-
-Treat the full name as optional and fall back to email when it is absent:
-
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const userId = requestHeaders.get("oai-authenticated-user-id");
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
-```
-
-## Optional Dispatch-Owned ChatGPT Sign-In
-
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs optional or required ChatGPT sign-in:
-
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use the returned `userId` as the stable user key for user-owned records; do not use email as a durable identifier.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send anonymous visitors through Sign in with ChatGPT.
-- In a Server Component, start sign-in with `<a href={chatGPTSignInPath(returnTo)} target="_top">`. The auth helper module is server-only; do not import it into a Client Component.
-- Do not use `fetch`, XHR, a client-side router, or a framework link that can prefetch the sign-in route. SIWC must start as a top-level navigation.
-- Never request the AuthAPI authorization endpoint directly. The dispatch-owned `/signin-with-chatgpt` route must start the SIWC flow.
-- Use `chatGPTSignOutPath(returnTo)` for browser sign-out links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because they depend on per-request identity headers.
-
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the OAuth cookies, and identity header injection. Do not implement app routes for those reserved paths. Routes that do not import and call the helper remain anonymous-compatible.
-
-SIWC establishes identity only; it does not prove workspace membership. Use the Sites hosting platform's access policy controls for workspace-wide restrictions, or enforce explicit server-side membership or allowlist checks.
-
-Use SIWC for account pages, user-specific dashboards, saved records, and write actions tied to the current ChatGPT user. Leave public content anonymous.
-
-## Local D1 migrations
-
-For a D1-backed local preview, generate SQL with `npm run db:generate`. Build once through the Sites skill's build entrypoint (or `npm run build` for standalone use) to generate `dist/server/wrangler.json`, rebuilding if bindings change. From the project root, apply each pending migration in order:
+From a terminal:
 
 ```sh
-node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_example.sql
+cd /Users/hakeembraimah/Documents/sb-model/football_model_starter/webapp
+npm run dev
 ```
 
-Replace the filename with the pending migration and `DB` with your D1 binding name if different. Use `.wrangler/state`, not `.wrangler/state/v3`; Wrangler adds the versioned directories. Do not replay migrations already applied locally. This updates only the preview database; publishing applies production migrations separately.
+Open **http://127.0.0.1:5173/**. If prompted by the local development authentication, visit **http://127.0.0.1:5173/signin-with-chatgpt?return_to=/**. The simulated local identity is Seedy. Keep the terminal running while using the local app. A `127.0.0.1` address works only on this computer; it is not internet hosting.
 
-## Diagnostic Commands
+The already-installed dependencies require Node >=22.13. For a fresh checkout, run `npm run install:ci` and `npm run build`, then initialize the local database once:
 
-- `npm run install:ci`: perform the one locked dependency install
-- `npm run dev`: start the Vite/Vinext development server
-- `npm run build`: build the deployable Sites artifact
-- `npm run start`: preview the built Worker locally with D1/R2 support
-- `npm run db:generate`: generate Drizzle migrations after schema changes
+```sh
+node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_acoustic_tempest.sql
+```
 
-When using the Sites plugin, follow its skill instructions for installation, builds, and publishing. These npm commands remain available for standalone use.
+Skip initialization if those tables already exist. Runtime credentials belong in ignored `.dev.vars` (local) and Sites secrets (hosted). `THERUNDOWN_API_KEY` is server-only. The source manifest contains the existing private Site identity. The hosted address is returned only after successful publication; local and hosted saved slips use separate databases.
 
-The portable build runs Vinext directly without a host `timeout` command. The managed-linux build uses `scripts/build-verified.sh` and its existing `SITES_BUILD_TIMEOUT` setting.
+## API usage controls
 
-## Learn More
+- **Odds are manual.** Only pressing **Refresh all-sport odds** calls TheRundown. Opening the app, changing dates, board filters or books, updating public data, switching odds targets, building/copying slips, and reading explanations make no paid odds requests.
+- Snapshots are cached for **30 minutes per date, league and bookmaker**, including empty observations. Repeated button clicks during that period reuse the snapshot. There is no background odds polling or unattended scheduler.
+- Requests fetch only **match-winner market 1** from the selected bookmaker. The provider's Toronto date offset normally allows one request per active league instead of two UTC dates. Rare DST boundary outliers can require an adjacent date. Account requests are spaced to respect the free-plan rate limit; HTTP 429 cooldowns are retained.
+- Public fixtures/results and NBA roster/depth/player updates are separate. These use ESPN, nflverse, the NHL official API and Football-Data. Public source requests are bounded and cached. Missing/incomplete sources retain dated snapshots.
+- Provider plan delays still apply. Observation time and last price change are displayed separately. No odds are invented when a market is absent.
 
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+## Suggested slips
+
+Toggle **10+**, **20–40**, **50–200**, or **Jackpot 500+ decimal odds**, then choose **Use this slip** to copy the proposal into your saved slip. Suggestions scan **all six competitions on the selected date**, regardless of the board filter. There is **no game-count cap**. Every game first contributes its **most probable supported outcome**, including modelled win-or-draw coverage for football. The no-draw (12) market remains available manually and is not used by suggestions. Opposing underdogs are never substituted to increase the payout. Combinations use one match-winner selection per game and the selected bookmaker. The search then chooses among those per-game outcomes to maximize joint modeled win probability within the target to a relative numerical tolerance of 0.01%. This numerical tolerance says nothing about the model’s predictive accuracy.
+
+Every proposal shows its estimated joint win probability, with an independence assumption. Higher odds can mean a very low chance of success. If the strongest per-game outcomes cannot reach a target, the app shows the available strongest selection set with **target not reached**. It does not downgrade outcomes or invent games to reach it.
+
+**Automatic prices:** a valid bookmaker quote takes precedence. When the feed has no quote, the app uses model fair odds, explicitly marked as an estimate. These estimates are not offered bookmaker prices, so a target that includes them is indicative. Dated bookmaker prices remain labeled research snapshots. Press **Refresh all-sport odds** to check current quotes; the 30-minute cache and manual-only rule still apply.
+
+Enter a hypothetical stake to see **return including stake** and **profit after subtracting stake**. Combined accumulator odds are the **product** of leg prices, not their sum. Prices and calculations fill automatically; there is no manual-price entry. NFL tied games may void a leg and reduce the odds. Explanations and calculations require no LLM API calls.
+
+## NBA rosters, team news and injuries
+
+The displayed NBA forecast now adds the current roster/availability adjustment to the historical team margin. **Match insights** shows both the historical baseline and roster-aware estimate, projected minutes, arrivals/departures relative to last season’s contributors, and linked news/injury sources. **Why the model favours…** explains strength, home court, rest, roster and absence contributions. This may still disagree with the bookmaker; the app flags that disagreement.
+
+- **Update data** refreshes ESPN roster membership, projected depth charts, current player boxes, relevant team news (30-minute public cache) and injury feeds (15-minute public cache). These are separate from paid odds calls.
+- Only a recent (within 48 hours), explicitly Out/inactive/suspended report, checked within 30 minutes, removes a player from a game within 48 hours. Projected minutes then redistribute to a 240-minute rotation, capped at 40 per player. Old or uncertain flags remain unconfirmed. An empty injury feed does not establish that players are healthy.
+- Official current-season NBA injury PDFs are linked when discoverable. A report that has not been published or retrieved is labeled accordingly. PDF contents are not automatically parsed into player availability; ESPN’s dated structured reports drive the numerical adjustment.
+- News is linked factual context. No numerical sentiment score or unsupported trade impact is invented from a headline. Current membership changes can include offseason signings and players traded during the prior season; the NBA official trade tracker is linked for confirmation.
+
+The player box-production proxy, half-weight roster changes and eight-point team caps are **unvalidated assumptions**. Historical NBA accuracy of 63.1% applies to the team-history baseline only, not the roster-aware extension. NFL quarterback/injury and NHL goalie/skater effects are not numerically modeled. Football models do not adjust for confirmed lineups. No model has established a profitable market edge.
+
+## Fixture reports
+
+Open **Fixture reports** from the workspace, or **Full fixture report** on a match card. The separate `/reports` page covers all six competitions. Choose the date and league, then a fixture to read:
+
+- Last five completed league games, scores, opponents and home/away status.
+- Current-season W/D/L, scoring and conceding rates, and home/away records.
+- Four historical seasons plus the available current season; recent head-to-head results.
+- Expected goals/margin, model probabilities, double-chance probabilities, and an explanation grounded in the actual inputs.
+- Dated public team news, roster availability flags and source checks. NBA reports include current projected rotations and membership changes.
+
+**Update research** checks public ESPN news and roster feeds, Football-Data, nflverse and NHL data. Public news/availability is cached for 30 minutes. No RotoWire key, OpticOdds subscription or paid odds requests are used by the reporting page. The unused RotoWire integration and secret fields were removed. Empty or unavailable injury data is not treated as a clean bill of health. Advanced xG/possession statistics and unvalidated player effects are not invented.
+
+Football double chance adds mutually exclusive result probabilities. The current low-cost odds feed only requests match-winner quotes; unquoted double chance is explicitly **model-priced**, so its target and payout are indicative until checked with a bookmaker. No 1X2 price is passed off as a quoted double-chance price.
+
+## Verify and rebuild seeds
+
+```sh
+npm run typecheck
+npm test
+npm run build
+```
+
+The new folders have independent public-data CLIs. After rebuilding their artifacts, regenerate the server seed from the repository root:
+
+```sh
+.venv/bin/python webapp/scripts/export-expanded-seed.py
+```
+
+The original NBA seed can be regenerated with `webapp/scripts/export-model-seed.py`. Server seed JSON contains public model inputs, no credentials or paid raw odds. D1 stores dated cache records and user-specific slips; it is distinct between local preview and hosted deployment.

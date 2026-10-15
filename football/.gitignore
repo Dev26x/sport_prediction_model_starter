@@ -1,0 +1,4 @@
+data/raw/
+data/private/
+__pycache__/
+.env*

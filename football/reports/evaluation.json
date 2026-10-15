@@ -1,0 +1,32 @@
+{
+  "epl": {
+    "test_games": 380,
+    "test_season": "2025\u201326",
+    "accuracy": 0.5052631578947369,
+    "log_loss": 1.0379817021818443,
+    "baseline_accuracy": 0.4263157894736842,
+    "baseline_log_loss": 1.0839070546199234,
+    "market_profitability_established": false,
+    "method": "Existing V2 Poisson model, same configuration, four prior/current seasons per league. Chronological full-season test; no market or player inputs."
+  },
+  "laliga": {
+    "test_games": 380,
+    "test_season": "2025\u201326",
+    "accuracy": 0.5236842105263158,
+    "log_loss": 0.9851848171261425,
+    "baseline_accuracy": 0.48947368421052634,
+    "baseline_log_loss": 1.048997996241419,
+    "market_profitability_established": false,
+    "method": "Existing V2 Poisson model, same configuration, four prior/current seasons per league. Chronological full-season test; no market or player inputs."
+  },
+  "seriea": {
+    "test_games": 380,
+    "test_season": "2025\u201326",
+    "accuracy": 0.5078947368421053,
+    "log_loss": 1.0215112673816897,
+    "baseline_accuracy": 0.3894736842105263,
+    "baseline_log_loss": 1.0891290758105676,
+    "market_profitability_established": false,
+    "method": "Existing V2 Poisson model, same configuration, four prior/current seasons per league. Chronological full-season test; no market or player inputs."
+  }
+}

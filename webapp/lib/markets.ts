@@ -1,5 +1,6 @@
 import { americanToDecimal, localDay } from './models';
 import type { Fixture, Quote, Sport } from './types';
+import { canonicalAbbr, isFootball } from './competitions';
 
 const NBA_ALIASES:Record<string,string>={NYK:'NY',GSW:'GS',SAS:'SA',NOP:'NO',WAS:'WSH',UTA:'UTAH',PHO:'PHX'};
 const PL_ALIASES:Record<string,string>={
@@ -9,10 +10,14 @@ const PL_ALIASES:Record<string,string>={
  'westhamunited':'West Ham','westham':'West Ham','brightonhovealbion':'Brighton','brightonandhovealbion':'Brighton','brighton':'Brighton',
  'leedsunited':'Leeds','leeds':'Leeds','leicestercity':'Leicester','leicester':'Leicester','ipswichtown':'Ipswich','ipswich':'Ipswich',
  'coventrycity':'Coventry','coventry':'Coventry','bournemouth':'Bournemouth','afcbournemouth':'Bournemouth',
+ 'hullcity':'Hull','hull':'Hull','atleticomadrid':'Ath Madrid','atletico':'Ath Madrid','athleticclub':'Ath Bilbao','athleticbilbao':'Ath Bilbao','athletic':'Ath Bilbao',
+ 'realsociedad':'Sociedad','sociedad':'Sociedad','realbetis':'Betis','betis':'Betis','celtavigo':'Celta','celta':'Celta','rayovallecano':'Vallecano','rayo':'Vallecano','vallecano':'Vallecano',
+ 'deportivoalaves':'Alaves','alaves':'Alaves','rcdmallorca':'Mallorca','rcdespanyol':'Espanol','espanyol':'Espanol','espanol':'Espanol','realoviedo':'Oviedo','deportivolacoruna':'La Coruna','lacoruna':'La Coruna','racingsantander':'Santander','racing':'Santander','deportivo':'La Coruna','malagacf':'Malaga','laspalmas':'Las Palmas',
+ 'acmilan':'Milan','milan':'Milan','intermilan':'Inter','internazionale':'Inter','inter':'Inter','asroma':'Roma','roma':'Roma','hellasverona':'Verona','verona':'Verona','uslecce':'Lecce',
 };
-export function plName(value:string) {const clean=value.toLowerCase().replace(/[^a-z]/g,'').replace(/fc$/,'');return PL_ALIASES[clean]||value.replace(/ FC$/,'');}
+export function plName(value:string) {const clean=value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z]/g,'').replace(/^fc|fc$/g,'');return PL_ALIASES[clean]||value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/^FC | FC$/g,'');}
 function sameTeam(provider:any,fixture:Fixture,side:'home'|'away') {
-  if(fixture.sport==='nba'){const abbr=NBA_ALIASES[provider.abbreviation]||provider.abbreviation;return abbr===fixture[side].abbr;}
+  if(!isFootball(fixture.sport)){return canonicalAbbr(fixture.sport,provider.abbreviation)===canonicalAbbr(fixture.sport,fixture[side].abbr);}
   return [provider.name,provider.team_name,provider.name_full,provider.display_name,provider.full_name].filter(Boolean).some(n=>plName(n).toLowerCase()===plName(fixture[side].name).toLowerCase());
 }
 export function normalizeQuotes(payload:any, fixtures:Fixture[], book:string, observedAt:string, sport:Sport):Quote[] {
@@ -27,13 +32,13 @@ export function normalizeQuotes(payload:any, fixtures:Fixture[], book:string, ob
     const fixture=matches[0];
     for(const m of event.markets||[]) {
       if(m.period_id!==0||![1,2,3].includes(m.market_id))continue;
-      if(sport==='epl'&&m.market_id===2||sport==='nba'&&m.market_id===3)continue;
+      if(isFootball(sport)&&m.market_id===2||!isFootball(sport)&&m.market_id===3)continue;
       const entries:{side:string;line:number|null;decimal:number;american:number;updatedAt:string}[]=[];
       for(const participant of m.participants||[]) {
         let side='';
         if(participant.type==='TYPE_TEAM') {if(String(participant.id)===String(home.team_id))side='home';if(String(participant.id)===String(away.team_id))side='away';}
         const label=String(participant.name||participant.description||'').toLowerCase();
-        if(!side&&m.market_id===1&&sport==='epl'&&(/draw|tie/.test(label)))side='draw';
+        if(!side&&m.market_id===1&&isFootball(sport)&&(/draw|tie/.test(label)))side='draw';
         if(m.market_id===3) {if(label==='over')side='over';if(label==='under')side='under';}
         if(!side)continue;
         for(const line of participant.lines||[]) {
@@ -46,7 +51,7 @@ export function normalizeQuotes(payload:any, fixtures:Fixture[], book:string, ob
         }
       }
       // Pair one unambiguous full market before removing bookmaker margin.
-      const wanted=m.market_id===1?(sport==='epl'?['home','draw','away']:['home','away']):m.market_id===2?['home','away']:['over','under'];
+      const wanted=m.market_id===1?(isFootball(sport)?['home','draw','away']:['home','away']):m.market_id===2?['home','away']:['over','under'];
       if(entries.length!==wanted.length||!wanted.every(s=>entries.filter(e=>e.side===s).length===1))continue;
       if(m.market_id===2&&Math.abs(entries[0].line!+entries[1].line!)>1e-7)continue;
       const sum=entries.reduce((s,e)=>s+1/e.decimal,0);if(sum<.8||sum>1.5)continue;

@@ -1,0 +1,22 @@
+{
+  "sport": "nhl",
+  "sigma_scale": 0.8163890004465085,
+  "calibration_season": 2025,
+  "test_season": 2026,
+  "calibration_last_result": "2025-04-17",
+  "fitted_before": "2025-10-07",
+  "settings": {
+    "half_life_days": 180,
+    "team_penalty": 20,
+    "rest_penalty": 100,
+    "rest_cap": 3,
+    "sigma_floor": 1.5,
+    "min_history": 600
+  },
+  "scope": "team-margin only; player effects not modeled",
+  "test_games": 1311,
+  "test_accuracy": 0.5293668954996186,
+  "baseline_always_home_accuracy": 0.5217391304347826,
+  "test_log_loss": 0.6906910613484024,
+  "market_profitability_established": false
+}

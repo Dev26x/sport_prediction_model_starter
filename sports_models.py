@@ -33,6 +33,8 @@ def rest(last,day,cap):return cap if last is None else min(cap,max(0,(day-last).
 def fit_margin(games,before,sport,settings=None):
     config=settings or SETTINGS[sport]
     before=pd.Timestamp(before).normalize();history=games.loc[games.day<before].copy().reset_index(drop=True)
+    if pd.isna(before):raise ValueError('Invalid model cutoff.')
+    if sport=='nhl' and history.hp.eq(history.ap).any():raise ValueError('Final NHL results must have a winner including overtime/shootout.')
     if len(history)<config.min_history:raise ValueError(f'Need {config.min_history} earlier regular-season games.')
     ids=sorted(set(history.home)|set(history.away));ix={team:i for i,team in enumerate(ids)}
     x=np.zeros((len(history),len(ids)+2));seen={}
@@ -54,6 +56,7 @@ def fit_margin(games,before,sport,settings=None):
 
 def margin_prediction(model,home,away,day,scale=1.,neutral=False,schedule=None):
     day=pd.Timestamp(day).normalize()
+    if not np.isfinite(scale) or scale<=0:raise ValueError('Probability scale must be positive and finite.')
     if day<model['before']:raise ValueError('Forecast predates the fitted model cutoff.')
     if home==away or home not in model['ids'] or away not in model['ids']:raise ValueError('Insufficient historical identity for this team.')
     seen=model['last_seen'].copy();cap=model['settings'].rest_cap

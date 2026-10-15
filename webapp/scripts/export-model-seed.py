@@ -44,6 +44,12 @@ for team, group in players.groupby('team_id'):
     seed['rosters'][str(team)] = [{"id": str(r.player_id), "name": r.player_name, "position": r.position,
         "injury": str(r.injury_status) if isinstance(r.injury_status, str) else '',
         "depth": int(r.depth_rank) if r.depth_rank == r.depth_rank else 99} for r in group.itertuples()]
+# Last completed season's public contributors support transparent roster comparisons.
+previous = {}
+for r in rows(ROOT / 'nba/data/player_seasons.csv'):
+    if r['season'] == '2026':
+        previous.setdefault(r['team_id'], []).append({'id': r['player_id'], 'name': r['player_name'], 'minutes': float(r['minutes'])})
+(ROOT / 'webapp/lib/nba-previous-rosters.json').write_text(json.dumps(previous, separators=(',', ':'), allow_nan=False))
 # Public fixture snapshots for a useful first visit; live refresh replaces these.
 for sport, date in [('epl', '2026-10-17'), ('nba', '2026-10-20')]:
     path = Path('/private/tmp/matchday-' + sport + '.json')

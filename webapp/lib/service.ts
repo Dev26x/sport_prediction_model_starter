@@ -1,20 +1,25 @@
 import { env } from 'cloudflare:workers';
 import rawSeed from './seed.json';
+import { teamResults, formSentence } from './form';
+import previousRosters from './nba-previous-rosters.json';
+import { parseNews, parseInjuries, rotationProjection, rosterForecast, officialReportFromHtml, type NewsItem, type InjuryItem, type NbaContext } from './nba-context';
 import { cached, putCache, fresh } from './storage';
-import { localDay, addDays, fitNba, nbaPrediction, normalCdf, plPrediction } from './models';
+import { localDay, addDays, fitNba, nbaPrediction, normalCdf, plPrediction, MARGIN_SETTINGS } from './models';
 import { normalizeQuotes, plName } from './markets';
-import { ODDS_CACHE_MINUTES } from './refresh-policy';
+import { ODDS_CACHE_MINUTES, providerOffsetMinutes } from './refresh-policy';
+import { COMPETITIONS, SPORTS, selectedSports, isFootball, canonicalAbbr } from './competitions';
+import { extraSeed, extraTeam, extraSnapshot, refreshExtraResults } from './extra-data';
 import type { DashboardData, Fixture, MatchCard, NbaGame, PlGame, RosterPlayer, Sport, Option, Quote } from './types';
 
 type PlayerPrior={name:string;minutes:number;mpg:number;features:Record<string,number>;impact:number};
 type Seed={snapshot:string;nbaGames:NbaGame[];nbaSchedule:NbaGame[];teams:{id:string;abbr:string;name:string}[];plGames:PlGame[];scale:number;translation:Record<string,number>;previousRoster:Record<string,number>;players:Record<string,PlayerPrior>;rosters:Record<string,RosterPlayer[]>;fixtures:Record<string,any>};
 const seed=rawSeed as unknown as Seed;
 const ESPN='https://site.api.espn.com/apis/site/v2/sports/';
-const PATH:Record<Sport,string>={nba:'basketball/nba',epl:'soccer/eng.1'};
+const PATH=Object.fromEntries(SPORTS.map(s=>[s,COMPETITIONS[s].path])) as Record<Sport,string>;
 export const BOOKS:Record<string,string>={'23':'FanDuel','19':'DraftKings','3':'Pinnacle'};
 export function validateInput(date:string,sport:string,book:string) {
   if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||new Date(date+'T12:00Z').toISOString().slice(0,10)!==date||date<'2025-10-01'||date>'2027-06-30')throw new Error('Choose a date between October 2025 and June 2027.');
-  if(!['all','nba','epl'].includes(sport)||!BOOKS[book])throw new Error('Invalid league or bookmaker.');
+  if(!['all','football',...SPORTS].includes(sport)||!BOOKS[book])throw new Error('Invalid league or bookmaker.');
 }
 async function fetchJson(url:string,headers?:Record<string,string>) {
   // Workers supports manual/follow only. Never forward the API key across redirects.
@@ -39,10 +44,10 @@ export function parseEvents(payload:any,sport:Sport):Fixture[] {
     const c=e.competitions?.[0],home=c?.competitors?.find((t:any)=>t.homeAway==='home'),away=c?.competitors?.find((t:any)=>t.homeAway==='away');
     if(!c||!home||!away||!Number.isFinite(Date.parse(e.date)))continue;
     const status=c.status?.type||e.status?.type||{},season=e.season||payload.season||{};
-    const team=(t:any)=>({id:String(t.team.id),name:sport==='epl'?plName(t.team.shortDisplayName||t.team.displayName):t.team.displayName,abbr:t.team.abbreviation});
+    const team=(t:any)=>{const known=extraTeam(sport,t.team.abbreviation);return {id:known?.id||String(t.team.id),espnId:String(t.team.id),name:isFootball(sport)?plName(t.team.shortDisplayName||t.team.displayName):(t.team.displayName||known?.name),abbr:canonicalAbbr(sport,t.team.abbreviation)};};
     const score=(t:any)=>Number(typeof t.score==='object'?t.score.value:t.score);
-    const preseason=sport==='nba'&&(Number(season.type)===1||season.slug==='preseason');
-    const unsupported=sport==='nba'&&(![1,2].includes(Number(season.type))||c.type?.abbreviation==='CC');
+    const preseason=!isFootball(sport)&&(Number(season.type)===1||season.slug==='preseason');
+    const unsupported=!isFootball(sport)&&(![1,2].includes(Number(season.type))||sport==='nba'&&c.type?.abbreviation==='CC');
     out.push({id:String(e.id),sport,start:e.date,day:localDay(e.date),home:team(home),away:team(away),status:status.description||'Unconfirmed',completed:!!status.completed,
       hp:status.completed?score(home):undefined,ap:status.completed?score(away):undefined,neutral:!!c.neutralSite,preseason,unsupported});
   }
@@ -50,11 +55,18 @@ export function parseEvents(payload:any,sport:Sport):Fixture[] {
 }
 async function fixtureList(date:string,sport:Sport):Promise<{value:Fixture[];at:string|null}> {
   const entry=await cached<Fixture[]>(`fixtures:${sport}:${date}`);
-  if(entry)return entry;
+  if(entry)return {...entry,value:entry.value.map(f=>({...f,home:canonicalFixtureTeam(f.home,sport),away:canonicalFixtureTeam(f.away,sport)}))};
   const publicSnapshot=seed.fixtures[`${sport}:${date}`];
   if(publicSnapshot)return {value:parseEvents(publicSnapshot,sport).filter(f=>f.day===date),at:seed.snapshot};
-  if(sport==='epl')return {value:[] as Fixture[],at:null};
+  if(isFootball(sport))return {value:[] as Fixture[],at:null};
+  if(sport==='nfl'||sport==='nhl') {const state=extraSeed.margin[sport];return {value:state.games.filter(g=>localDay(g.start)===date).map(g=>({id:g.id,sport,start:g.start,day:date,home:state.teams.find(t=>t.id===g.home)!,away:state.teams.find(t=>t.id===g.away)!,status:g.completed?'Final':'Scheduled',completed:g.completed,hp:g.hp??undefined,ap:g.ap??undefined,neutral:g.neutral,preseason:false})),at:state.snapshot};}
   return {value:seed.nbaSchedule.filter(g=>localDay(g.start)===date).map(g=>({id:g.id,sport,start:g.start,day:date,home:seed.teams.find(t=>t.id===g.home)!,away:seed.teams.find(t=>t.id===g.away)!,status:'Scheduled',completed:false,neutral:g.neutral,preseason:false})),at:seed.snapshot};
+}
+export async function researchFixtures(date:string,sport:Sport){return (await fixtureList(date,sport)).value;}
+function canonicalFixtureTeam(team:Fixture['home'],sport:Sport){
+  if(isFootball(sport))return {...team,name:plName(team.name)};
+  const known=extraTeam(sport,team.abbr);
+  return known?{...team,id:known.id,abbr:known.abbr,name:known.id!==team.id?known.name:team.name}:team;
 }
 function parseCsv(text:string):Record<string,string>[] {
   const rows:string[][]=[];let row:string[]=[],value='',quoted=false;
@@ -83,19 +95,21 @@ export async function refreshSources(date:string,sports:Sport[]) {
       for(const r of results)if(r.status==='fulfilled'){for(const g of r.value)if(!g.completed||(g.hp!>0&&g.ap!>0&&g.hp!==g.ap))values.set(g.id,g);}else failed++;
       if(!failed){await putCache('nba:current',[...values.values()]);messages.push(`NBA: checked all 30 schedules, ${[...values.values()].filter(g=>g.completed).length} current-season results.`);}
       else {messages.push(`NBA: ${failed} schedule requests failed; retaining the previous complete result snapshot.`);}
+    } else if(sport==='nfl'||sport==='nhl') {
+      try {messages.push(...await refreshExtraResults(sport));}catch(e){messages.push(`${COMPETITIONS[sport].label} results: ${(e as Error).message}`);}
     } else {
-      const old=await cached<PlGame[]>('epl:current');if(fresh(old?.at,60)){messages.push('PL results were checked within the last hour.');continue;}
+      const old=await cached<PlGame[]>(`${sport}:current`);if(fresh(old?.at,60)){messages.push(`${COMPETITIONS[sport].label} results were checked within the last hour.`);continue;}
       try {
-        const response=await fetch('https://football-data.co.uk/mmz4281/2627/E0.csv',{redirect:'manual',signal:AbortSignal.timeout(15000)});
+        const response=await fetch(`https://football-data.co.uk/mmz4281/2627/${COMPETITIONS[sport].footballCode}.csv`,{redirect:'manual',signal:AbortSignal.timeout(15000)});
         if(!response.ok)throw new Error(`Results feed returned HTTP ${response.status}.`);
         const rows=parseCsv(await response.text()),matches:PlGame[]=[];
         for(const r of rows){if(!r.Date||!r.HomeTeam||!r.AwayTeam||r.FTHG===''||r.FTAG==='')continue;const [d,m,y]=r.Date.split('/');const day=`${y.length===2?'20'+y:y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;const hp=Number(r.FTHG),ap=Number(r.FTAG);if(day>='2026-07-01'&&day<=localDay(Date.now())&&Number.isInteger(hp)&&hp>=0&&Number.isInteger(ap)&&ap>=0)matches.push({day,home:r.HomeTeam,away:r.AwayTeam,hp,ap});}
-        if(matches.length<seed.plGames.filter(g=>g.day>='2026-07-01').length)throw new Error('Result feed is incomplete; previous snapshot retained.');
-        await putCache('epl:current',matches);messages.push(`PL: checked ${matches.length} current-season results.`);
-      }catch(e){messages.push(`PL results: ${(e as Error).message}`);}
+        if(matches.length<(extraSeed.football[sport]?.games||[]).filter(g=>g.day>='2026-07-01').length)throw new Error('Result feed is incomplete; previous snapshot retained.');
+        await putCache(`${sport}:current`,matches);messages.push(`${COMPETITIONS[sport].label}: checked ${matches.length} current-season results.`);
+      }catch(e){messages.push(`${COMPETITIONS[sport].label} results: ${(e as Error).message}`);}
     }
   }
-  await putCache('health:sources',messages);return {messages};
+  for(const sport of sports)await putCache(`health:sources:${sport}:${date}`,messages);return {messages};
 }
 export async function refreshRosters(date:string,depthOnly=false) {
   const fixtures=(await fixtureList(date,'nba')).value.filter(f=>!f.completed&&!f.preseason&&!f.unsupported);
@@ -104,7 +118,7 @@ export async function refreshRosters(date:string,depthOnly=false) {
     const key=`nba:${depthOnly?'depth':'roster'}:${id}`,old=await cached<any>(key);if(fresh(old?.at,60))return;
     const {data}=await fetchJson(`${ESPN}basketball/nba/teams/${id}/${depthOnly?'depthcharts':'roster'}`);
     if(depthOnly){const ranks:Record<string,number>={};const walk=(v:any)=>{if(Array.isArray(v))v.forEach(walk);else if(v&&typeof v==='object'){if(v.athletes)for(const [i,a]of v.athletes.entries())if(a.id)ranks[String(a.id)]=Math.min(ranks[String(a.id)]||99,i+1);for(const[k,item]of Object.entries(v))if(k!=='athletes')walk(item);}};walk(data);if(Object.keys(ranks).length<5)throw new Error('Depth chart incomplete.');await putCache(key,ranks);}
-    else {const players:RosterPlayer[]=(data.athletes||[]).map((p:any)=>({id:String(p.id),name:p.displayName,position:p.position?.abbreviation||'',injury:(p.injuries||[]).map((i:any)=>i.status||i.type?.description||'Injury flag').join(', '),depth:99}));if(players.length<10||new Set(players.map(p=>p.id)).size!==players.length)throw new Error('Roster incomplete.');await putCache(key,players);}
+    else {const players:RosterPlayer[]=(data.athletes||[]).map((p:any)=>({id:String(p.id),name:p.displayName,position:p.position?.abbreviation||'',injury:(p.injuries||[]).map((i:any)=>i.status||i.type?.description||'Injury flag').join(', '),injuryAt:p.injuries?.[0]?.date,injurySource:'https://www.espn.com/nba/injuries',depth:99}));if(players.length<10||new Set(players.map(p=>p.id)).size!==players.length)throw new Error('Roster incomplete.');await putCache(key,players);}
   });
   const failures=results.filter(r=>r.status==='rejected').length;
   const messages=[`${depthOnly?'Depth charts':'NBA rosters'}: ${ids.length-failures}/${ids.length} teams checked${failures?'; failed teams retain dated snapshots':''}.`];await putCache(`health:${depthOnly?'depth':'rosters'}`,messages);return {messages};
@@ -148,8 +162,12 @@ export async function refreshOdds(date:string,sport:Sport,book:string) {
   const cooldown=await cached<{until:number}>('rundown:cooldown');
   if(cooldown&&cooldown.value.until>Date.now())return {messages:['TheRundown rate limit cooldown is active. Retaining dated prices.']};
   const quotes:Quote[]=[],usage:Record<string,string>={};let failed=0;
-  // Provider calendar is UTC. Fetch both UTC dates for a Toronto calendar day.
-  for(const utcDate of [date,addDays(date,1)]) {
+  // The provider supports a minute offset for its date boundary. One narrow
+  // match-winner request normally covers the whole Toronto slate. Only DST
+  // boundary outliers need an adjacent date to cover a 23/25-hour calendar day.
+  const offset=providerOffsetMinutes(date),windowStart=Date.parse(date+'T00:00Z')+offset*60000;
+  const requestDates=[date];if(fixtures.some(f=>Date.parse(f.start)<windowStart))requestDates.push(addDays(date,-1));if(fixtures.some(f=>Date.parse(f.start)>=windowStart+86400000))requestDates.push(addDays(date,1));
+  for(const utcDate of requestDates) {
     try {
       // Free access permits one request/second across the account. The database
       // lease serializes refreshes and this timestamp spaces league/date calls.
@@ -157,7 +175,7 @@ export async function refreshOdds(date:string,sport:Sport,book:string) {
       const delay=previous?Math.max(0,1200-(Date.now()-previous.value)):0;
       if(delay)await new Promise(resolve=>setTimeout(resolve,delay));
       await putCache('rundown:last-request',Date.now());
-      const response=await fetch(`https://therundown.io/api/v2/sports/${sport==='nba'?4:11}/events/${utcDate}?affiliate_ids=${book}&market_ids=${sport==='nba'?'1,2':'1,3'}&main_line=true&hide_closed=true`,{headers:{Accept:'application/json','X-TheRundown-Key':env.THERUNDOWN_API_KEY},redirect:'manual',signal:AbortSignal.timeout(15000)});
+      const response=await fetch(`https://therundown.io/api/v2/sports/${COMPETITIONS[sport].providerId}/events/${utcDate}?offset=${offset}&affiliate_ids=${book}&market_ids=1&main_line=true&hide_closed=true`,{headers:{Accept:'application/json','X-TheRundown-Key':env.THERUNDOWN_API_KEY},redirect:'manual',signal:AbortSignal.timeout(15000)});
       if(!response.ok){
         if(response.status===429){const retry=response.headers.get('Retry-After');const wait=retry?(Number.isFinite(Number(retry))?Number(retry)*1000:Date.parse(retry)-Date.now()):60000;await putCache('rundown:cooldown',{until:Date.now()+Math.max(1000,Number.isFinite(wait)?wait:60000)});}
         throw new Error(response.status===429?'Provider rate limit reached. Wait before refreshing.':response.status===401||response.status===403?'Provider access was denied. Check the API plan/key.':`TheRundown returned HTTP ${response.status}.`);
@@ -165,70 +183,107 @@ export async function refreshOdds(date:string,sport:Sport,book:string) {
       const data=await response.json(),headers=response.headers;
       const observedAt=new Date().toISOString();quotes.push(...normalizeQuotes(data,fixtures,book,observedAt,sport));
       for(const[k,v]of headers.entries())if(/remaining|datapoints|quota|limit/.test(k)&&!k.includes('key'))usage[k]=v;
-    }catch(e){failed++;await putCache(`health:odds:${sport}`,[(e as Error).message]);break;}
+    }catch(e){failed++;await putCache(`health:odds:${sport}:${date}:${book}`,[(e as Error).message]);break;}
   }
   if(failed) return {messages:[`TheRundown ${sport.toUpperCase()}: incomplete refresh; previous quote snapshot retained. Check Data status.`]};
-  const unique=[...new Map(quotes.map(q=>[`${q.fixtureId}:${q.market}:${q.side}:${q.line}`,q])).values()];await putCache(key,{quotes:unique,usage});await putCache(`health:odds:${sport}`,[]);
+  const unique=[...new Map(quotes.map(q=>[`${q.fixtureId}:${q.market}:${q.side}:${q.line}`,q])).values()];await putCache(key,{quotes:unique,usage});await putCache(`health:odds:${sport}:${date}:${book}`,[]);
   return {messages:[`TheRundown ${sport.toUpperCase()}: ${unique.length} complete-market selections observed at ${BOOKS[book]}. Missing markets remain unavailable.`]};
 }
-async function teamRoster(id:string,boxes:CurrentBoxes|null) {
+export async function refreshNbaContext(date:string){
+  const fixtures=(await fixtureList(date,'nba')).value.filter(f=>!f.completed&&!f.preseason&&!f.unsupported),ids=[...new Set(fixtures.flatMap(f=>[f.home.id,f.away.id]))];
+  if(!ids.length||date<localDay(Date.now()))return {messages:['No upcoming NBA team news to check on this date.']};
+  const messages:string[]=[];
+  const results=await pool(ids,async id=>{const key=`nba:news:${id}`,old=await cached<NewsItem[]>(key);if(fresh(old?.at,30))return;const team=seed.teams.find(t=>t.id===id);const {data}=await fetchJson(`${ESPN}basketball/nba/news?team=${id}&limit=12`);if(!Array.isArray(data.articles))throw new Error('News response missing articles.');await putCache(key,parseNews(data,id,team?.name||''));},5);
+  messages.push(`NBA news: ${ids.length-results.filter(r=>r.status==='rejected').length}/${ids.length} team feeds checked. Headlines are context; no sentiment score is invented.`);
+  try{const old=await cached<InjuryItem[]>('nba:injuries');if(!fresh(old?.at,15)){const {data}=await fetchJson(`${ESPN}basketball/nba/injuries`);if(!Array.isArray(data.injuries))throw new Error('Injury response missing its report list.');await putCache('nba:injuries',parseInjuries(data));}const report=await cached<InjuryItem[]>('nba:injuries');messages.push(report?.value.length?'NBA injury feed checked. Only recent, explicitly Out/inactive players are excluded for games within 48 hours.':'NBA injury feed returned no entries. Availability remains unconfirmed; check the official report near tip-off.');}catch(e){messages.push(`NBA injury feed: ${(e as Error).message} Dated flags remain context only.`);}
+  const reportIndex='https://official.nba.com/nba-injury-report-2026-27-season/';
+  try{const old=await cached<NbaContext['officialReport']>('nba:official-report');if(!fresh(old?.at,30)){const response=await fetch(reportIndex,{redirect:'follow',signal:AbortSignal.timeout(10000)});if(!response.ok)throw new Error('The current-season official report has not been retrieved.');const report=officialReportFromHtml(await response.text(),reportIndex);await putCache('nba:official-report',report);if(!report.available)messages.push('No dated current-season NBA injury PDF is published in the checked index.');}}catch(e){await putCache('nba:official-report',{url:reportIndex,publishedAt:null,available:false});messages.push((e as Error).message+' Use the official report link before tip-off.');}
+  await putCache(`health:nba-context:${date}`,messages);return {messages};
+}
+async function teamRoster(id:string,boxes:CurrentBoxes|null,start:string,injuries:{value:InjuryItem[];at:string}|null) {
   const roster=await cached<RosterPlayer[]>(`nba:roster:${id}`),depth=await cached<Record<string,number>>(`nba:depth:${id}`);
-  const players=(roster?.value||seed.rosters[id]||[]).map(p=>({...p,depth:depth?.value[p.id]??p.depth}));
-  const ranked=players.map(p=>{const prior=seed.players[p.id],current=boxes?.players[p.id];const mpg=current&&current.games>=3?Math.min(36,current.minutes/current.games):prior?.mpg||8;const role=p.depth===1?30:p.depth===2?18:p.depth===3?8:3;const weight=prior?.minutes?(.5*Math.max(4,mpg)+.5*role):role;let impact=prior?.impact||0;
-    if(current&&prior){const denominator=prior.minutes+750+current.minutes;for(const k of Object.keys(seed.translation)){const changed=(prior.features[k]*(prior.minutes+750)+current.features[k]*36)/denominator-prior.features[k];impact+=changed*seed.translation[k];}}
-    return {...p,weight,impact};}).sort((a,b)=>b.weight-a.weight);
-  const active=ranked.slice(0,11),alloc=Array(active.length).fill(0);let remaining=240,indices=active.map((_,i)=>i);
-  if(active.length>=6)while(indices.length){const sum=indices.reduce((s,i)=>s+active[i].weight,0),over=indices.filter(i=>active[i].weight/sum*remaining>40);if(!over.length){for(const i of indices)alloc[i]=active[i].weight/sum*remaining;break;}for(const i of over){alloc[i]=40;remaining-=40;}indices=indices.filter(i=>!over.includes(i));}
-  const value=active.reduce((s,p,i)=>s+p.impact*alloc[i]/48,0),delta=Math.max(-8,Math.min(8,.5*(value-seed.previousRoster[id])));
-  return {players,delta,at:[roster?.at||seed.snapshot,depth?.at||seed.snapshot].sort()[0]};
+  const players=(roster?.value||seed.rosters[id]||[]).map(p=>{const report=injuries?.value.find(i=>i.teamId===id&&i.playerId===p.id);return {...p,depth:depth?.value[p.id]??p.depth,...(report?{injury:report.status,injuryAt:report.reportedAt||undefined,injurySource:report.url}:{})};});
+  const priors=Object.fromEntries(players.map(p=>{const prior=seed.players[p.id],current=boxes?.players[p.id];let impact=prior?.impact||0;const mpg=current&&current.games>=3?Math.min(36,current.minutes/current.games):prior?.mpg||8;if(current&&prior){const denominator=prior.minutes+750+current.minutes;for(const k of Object.keys(seed.translation)){const changed=(prior.features[k]*(prior.minutes+750)+current.features[k]*36)/denominator-prior.features[k];impact+=changed*seed.translation[k];}}return [p.id,{mpg,minutes:prior?.minutes||0,impact}];}));
+  const projection=rotationProjection(players,priors,seed.previousRoster[id]||0,start,injuries?.at||roster?.at||null);
+  const previous=(previousRosters as Record<string,{id:string;name:string;minutes:number}[]>)[id]||[],currentIds=new Set(players.map(p=>p.id)),priorIds=new Set(previous.map(p=>p.id));
+  const changes={arrivals:projection.players.filter(p=>!priorIds.has(p.id)).sort((a,b)=>(b.projectedMinutes||0)-(a.projectedMinutes||0)).slice(0,6).map(p=>p.name),departures:previous.filter(p=>!currentIds.has(p.id)).sort((a,b)=>b.minutes-a.minutes).slice(0,6).map(p=>p.name)};
+  return {...projection,changes,at:[roster?.at||seed.snapshot,depth?.at||seed.snapshot].sort()[0]};
 }
 export async function dashboard(date:string,sportFilter:string,book:string):Promise<DashboardData> {
-  const sports:Sport[]=sportFilter==='all'?['nba','epl']:[sportFilter as Sport];
-  const [nbaCurrent,plCurrent,boxes,health]=await Promise.all([cached<NbaGame[]>('nba:current'),cached<PlGame[]>('epl:current'),cached<CurrentBoxes>('nba:boxes'),cached<string[]>('health:sources')]);
-  const mergedNba=[...new Map([...seed.nbaGames,...(nbaCurrent?.value||[])].map(g=>[g.id,g])).values()];
-  const mergedPl=[...new Map([...seed.plGames,...(plCurrent?.value||[])].map(g=>[`${g.day}:${g.home}:${g.away}`,g])).values()];
-  const today=localDay(Date.now()),cutoff=date<today?date:today;
-  const model=sports.includes('nba')?fitNba(mergedNba,cutoff):null;
-  const all:MatchCard[]=[],fixtureTimes:string[]=[],oddsTimes:string[]=[],rosterTimes:string[]=[],resultsTimes:string[]=[],messages=health?.value||[];
+  const sports=selectedSports(sportFilter);
+  const rows=await Promise.all(SPORTS.map(async sport=>[sport,await cached<any[]>(`${sport}:current`)] as const));
+  const current=Object.fromEntries(rows) as Record<Sport,{value:any[];at:string}|null>;
+  const boxes=await cached<CurrentBoxes>('nba:boxes');
+  const injuryFeed=await cached<InjuryItem[]>('nba:injuries'),officialReport=await cached<NbaContext['officialReport']>('nba:official-report');
+  const nbaHealth=await cached<string[]>(`health:nba-context:${date}`);
+  const marginGames:Record<string,NbaGame[]>={},footballGames:Record<string,PlGame[]>={},counts={} as Record<Sport,number>;
+  for(const sport of SPORTS) {
+    if(isFootball(sport)) {const base=extraSeed.football[sport]?.games||[];footballGames[sport]=[...new Map([...base,...(current[sport]?.value||[])].map(g=>[`${g.day}:${g.home}:${g.away}`,g])).values()];counts[sport]=footballGames[sport].length;}
+    else {const base=sport==='nba'?seed.nbaGames:extraSeed.margin[sport as 'nfl'|'nhl'].games;marginGames[sport]=[...new Map([...base,...(current[sport]?.value||[])].map(g=>[g.id,g])).values()];counts[sport]=marginGames[sport].filter(g=>g.completed).length;}
+  }
+  const today=localDay(Date.now()),cutoff=date<today?date:today,models:Record<string,ReturnType<typeof fitNba>>={};
+  for(const sport of sports)if(!isFootball(sport))models[sport]=fitNba(marginGames[sport],cutoff,MARGIN_SETTINGS[sport]);
+  const all:MatchCard[]=[],fixtureTimes:string[]=[],oddsTimes:string[]=[],rosterTimes:string[]=[],resultsTimes:string[]=[],messages:string[]=[];
   for(const sport of sports) {
+    const sourceHealth=await cached<string[]>(`health:sources:${sport}:${date}`);if(sourceHealth)messages.push(...sourceHealth.value);
     const feed=await fixtureList(date,sport);if(feed.at)fixtureTimes.push(feed.at);
-    resultsTimes.push((sport==='nba'?nbaCurrent:plCurrent)?.at||seed.snapshot);
+    const resultSnapshot=current[sport]?.at||(sport==='nba'?seed.snapshot:extraSnapshot(sport))!;
+    resultsTimes.push(resultSnapshot);
     const odds=await cached<{quotes:Quote[]}>(`odds:${sport}:${date}:${book}`);if(odds)oddsTimes.push(odds.at);
-    for(const fixture of feed.value) {
-      const f=fixture;let prediction:MatchCard['prediction'],extra:{key:string;side:string;label:string;p:number;experimental:boolean;line?:number}[]=[];let roster:MatchCard['roster'];
+    for(const f of feed.value) {
+      let prediction:MatchCard['prediction'],outcomes:{key:string;side:string;label:string;p:number;experimental:boolean;line?:number}[]=[],roster:MatchCard['roster'],context:MatchCard['context'];
       try {
-        if(sport==='nba') {
-          const p=nbaPrediction(model!,f.home.id,f.away.id,date,date>='2025-10-01'?seed.scale:1,f.neutral,[...seed.nbaSchedule,...(nbaCurrent?.value||[])]);prediction=p;
-          if(date>=today) {const [h,a]=await Promise.all([teamRoster(f.home.id,boxes?.value||null),teamRoster(f.away.id,boxes?.value||null)]);prediction.rosterDelta=h.delta-a.delta;prediction.rosterHome=normalCdf((p.margin+h.delta-a.delta)/(p.sigma*seed.scale));roster={home:h.players,away:a.players,snapshot:[h.at,a.at].sort()[0]};rosterTimes.push(roster.snapshot);}
-          extra=[{key:'home',side:'home',label:`${f.home.abbr} to win`,p:p.home,experimental:false},{key:'away',side:'away',label:`${f.away.abbr} to win`,p:p.away,experimental:false}];
-          for(const q of odds?.value.quotes.filter(q=>q.fixtureId===f.id&&q.market==='spread')||[]) {const probability=q.side==='home'?normalCdf((p.margin+q.line!)/p.sigma):normalCdf((-p.margin+q.line!)/p.sigma);extra.push({key:`spread:${q.side}`,side:q.side,label:`${q.side==='home'?f.home.abbr:f.away.abbr} ${q.line!>0?'+':''}${q.line}`,p:probability,experimental:true,line:q.line!});}
+        if(!isFootball(sport)) {
+          const scale=sport==='nba'?(date>='2025-10-01'?seed.scale:1):(date>=extraSeed.margin[sport as 'nfl'|'nhl'].fittedBefore?extraSeed.margin[sport as 'nfl'|'nhl'].scale:1);
+          const schedule=[...new Map([...(sport==='nba'?seed.nbaSchedule:marginGames[sport].filter(g=>g.season===COMPETITIONS[sport].season)),...(current[sport]?.value||[])].map(g=>[g.id,g])).values()];
+          const p=nbaPrediction(models[sport],f.home.id,f.away.id,date,scale,f.neutral,schedule);prediction=p;
+          if(sport==='nba'&&date>=today) {
+            const [h,a,hn,an]=await Promise.all([teamRoster(f.home.id,boxes?.value||null,f.start,injuryFeed),teamRoster(f.away.id,boxes?.value||null,f.start,injuryFeed),cached<NewsItem[]>(`nba:news:${f.home.id}`),cached<NewsItem[]>(`nba:news:${f.away.id}`)]);
+            const adjusted=rosterForecast(p,h.totalDelta,a.totalDelta,scale),n=models[sport].coefficients.length;
+            prediction={...p,...adjusted,rosterHome:adjusted.home,homeRosterDelta:h.rosterDelta,awayRosterDelta:a.rosterDelta,injuryDelta:h.injuryDelta-a.injuryDelta,homeCourt:f.neutral?0:models[sport].coefficients[n-2],strengthMargin:models[sport].coefficients[models[sport].ids.indexOf(f.home.id)]-models[sport].coefficients[models[sport].ids.indexOf(f.away.id)]};
+            prediction.restMargin=p.margin-prediction.strengthMargin! -prediction.homeCourt!;
+            roster={home:h.players,away:a.players,snapshot:[h.at,a.at].sort()[0],changes:{home:h.changes,away:a.changes}};rosterTimes.push(roster.snapshot);
+            context={news:[...(hn?.value||[]),...(an?.value||[])].filter((v,i,rows)=>rows.findIndex(r=>r.url===v.url)===i).sort((a,b)=>b.publishedAt.localeCompare(a.publishedAt)).slice(0,8),injuries:(injuryFeed?.value||[]).filter(i=>[f.home.id,f.away.id].includes(i.teamId)),checkedAt:injuryFeed?.at||null,officialReport:officialReport?.value||{url:'https://official.nba.com/nba-injury-report-2026-27-season/',publishedAt:null,available:false},messages:nbaHealth?.value||['NBA news and game-day injuries have not yet been checked.']};
+          }
+          outcomes=[{key:'home',side:'home',label:`${f.home.abbr} to win`,p:prediction.home,experimental:false},{key:'away',side:'away',label:`${f.away.abbr} to win`,p:prediction.away,experimental:false}];
+          for(const q of odds?.value.quotes.filter(q=>q.fixtureId===f.id&&q.market==='spread')||[]) {const probability=q.side==='home'?normalCdf((prediction.margin!+q.line!)/(p.sigma*scale)):normalCdf((-prediction.margin!+q.line!)/(p.sigma*scale));outcomes.push({key:`spread:${q.side}`,side:q.side,label:`${q.side==='home'?f.home.abbr:f.away.abbr} ${q.line!>0?'+':''}${q.line}`,p:probability,experimental:true,line:q.line!});}
         } else {
-          const p=plPrediction(mergedPl,f.home.name,f.away.name,cutoff);prediction=p;
-          extra=[{key:'home',side:'home',label:`${f.home.name} to win`,p:p.home,experimental:false},{key:'draw',side:'draw',label:'Draw',p:p.draw,experimental:false},{key:'away',side:'away',label:`${f.away.name} to win`,p:p.away,experimental:false},
+          const p=plPrediction(footballGames[sport],f.home.name,f.away.name,cutoff);prediction=p;
+          outcomes=[{key:'home',side:'home',label:`${f.home.name} to win`,p:p.home,experimental:false},{key:'draw',side:'draw',label:'Draw',p:p.draw,experimental:false},{key:'away',side:'away',label:`${f.away.name} to win`,p:p.away,experimental:false},
             {key:'total:over',side:'over',label:'Over 2.5 goals',p:p.over,experimental:true,line:2.5},{key:'total:under',side:'under',label:'Under 2.5 goals',p:1-p.over,experimental:true,line:2.5},{key:'btts:yes',side:'yes',label:'Both teams to score',p:p.btts,experimental:true},{key:'btts:no',side:'no',label:'Both teams to score · No',p:1-p.btts,experimental:true}];
         }
-        const options:Option[]=extra.map(e=>{
-          const market=e.key.includes(':')?e.key.split(':')[0]:'moneyline';
+        if(isFootball(sport)){
+          const pairs=[{key:'home_draw',p:prediction.home+(prediction.draw||0),label:`${f.home.name} or draw`},{key:'away_draw',p:prediction.away+(prediction.draw||0),label:`${f.away.name} or draw`},{key:'home_away',p:prediction.home+prediction.away,label:'Either team wins · no draw'}];
+          outcomes.push(...pairs.map(pair=>({key:`doublechance:${pair.key}`,side:pair.key,label:pair.label,p:pair.p,experimental:false})));
+        }
+        const inputs=isFootball(sport)?footballGames[sport]:marginGames[sport],homeKey=isFootball(sport)?f.home.name:f.home.id,awayKey=isFootball(sport)?f.away.name:f.away.id;
+        const recentForm=formSentence(f.home.name,teamResults(inputs,homeKey,cutoff),isFootball(sport)||sport==='nhl'?'goals':'points')+' '+formSentence(f.away.name,teamResults(inputs,awayKey,cutoff),isFootball(sport)||sport==='nhl'?'goals':'points');
+        const options:Option[]=outcomes.map(e=>{
+          const market=e.key.includes(':')?e.key.split(':')[0]:'moneyline',push=sport==='nfl'&&market==='moneyline'?(prediction.draw||0):0;
+          const comparisonProbability=e.p/(1-push),fairOdds=(1-push)/e.p;
           const quote=odds?.value.quotes.find(q=>q.fixtureId===f.id&&q.market===market&&q.side===e.side&&(e.line===undefined||e.line===q.line))||null;
-          const edge=quote?e.p-quote.marketProbability:null,ev=quote?e.p*quote.decimal-1:null;
-          const resultSnapshot=(sport==='nba'?nbaCurrent:plCurrent)?.at;
-          const timesGood=fresh(feed.at,360)&&fresh(resultSnapshot,26*60)&&quote&&fresh(quote.observedAt,ODDS_CACHE_MINUTES)&&Date.parse(quote.observedAt)>=Date.parse(resultSnapshot||seed.snapshot);
+          const edge=quote?comparisonProbability-quote.marketProbability:null,ev=quote?e.p*quote.decimal+push-1:null;
+          const timesGood=fresh(feed.at,360)&&fresh(resultSnapshot,26*60)&&quote&&fresh(quote.observedAt,ODDS_CACHE_MINUTES)&&Date.parse(quote.observedAt)>=Date.parse(resultSnapshot);
           const supported=!!(timesGood&&!e.experimental&&!prediction.unknownTeam&&!f.completed&&!f.preseason&&!f.unsupported&&f.status==='Scheduled'&&Date.parse(f.start)>Date.now()+300000&&date>=today);
           const eligible=supported&&e.p>=.55&&edge!==null&&edge>=.025&&ev!==null&&ev>=.02;
-          const suggestionEligible=supported&&market==='moneyline'&&e.p>=.5&&edge!==null&&edge>0&&ev!==null&&ev>0;
+          const suggestionEligible=!!(!e.experimental&&['moneyline','doublechance'].includes(market)&&!prediction.unknownTeam&&!f.completed&&!f.preseason&&!f.unsupported&&f.status==='Scheduled'&&Date.parse(f.start)>Date.now()+300000&&date>=today);
           const pct=(value:number)=>(100*value).toFixed(1)+'%';
-          const selected=e.side==='home'?f.home:f.away;
-          const modelReason=sport==='nba'?`${e.label}: ${pct(e.p)} team-model chance. The opponent-adjusted strength, home court and scheduled rest produce an expected ${f.home.abbr} margin of ${prediction.margin!.toFixed(1)} points.`:`${e.label}: ${pct(e.p)} model chance. Recency-weighted scoring rates project ${prediction.expectedGoals![0].toFixed(2)} goals for ${f.home.name} and ${prediction.expectedGoals![1].toFixed(2)} for ${f.away.name}.`;
-          const priceReason=quote?`At ${quote.decimal.toFixed(2)} odds, fair model odds are ${(1/e.p).toFixed(2)}. The margin-removed market chance is ${pct(quote.marketProbability)} (${edge!>=0?'+':''}${(edge!*100).toFixed(1)} percentage points of model edge).`:'No complete bookmaker quote is available for a price comparison.';
+          let modelReason=!isFootball(sport)?`${e.label}: ${pct(e.p)} team-model win chance. Opponent-adjusted strength, home court and scheduled rest produce an expected ${f.home.abbr} margin of ${prediction.margin!.toFixed(1)} ${sport==='nhl'?'goals':'points'}.`:`${e.label}: ${pct(e.p)} model chance. Recency-weighted scoring rates project ${prediction.expectedGoals![0].toFixed(2)} goals for ${f.home.name} and ${prediction.expectedGoals![1].toFixed(2)} for ${f.away.name}.`;
+          if(sport==='nba'&&prediction.baselineHome!==undefined){const base=e.side==='home'?prediction.baselineHome:1-prediction.baselineHome;modelReason=`${e.label}: ${pct(e.p)} roster-aware model estimate, versus ${pct(base)} from historical team results alone. ${f.home.abbr} margin: historical strength ${prediction.strengthMargin!.toFixed(2)}, home court ${prediction.homeCourt!.toFixed(2)}, rest ${prediction.restMargin!.toFixed(2)}, roster changes ${(prediction.rosterDelta!-prediction.injuryDelta!).toFixed(2)}, recent confirmed absences ${prediction.injuryDelta!.toFixed(2)} points; final ${prediction.margin!.toFixed(2)}. The roster and availability extension is not yet historically calibrated.`;}
+          if(market==='doublechance')modelReason=`${e.label}: ${pct(e.p)} estimated chance, calculated by adding the mutually exclusive covered result probabilities from the scoring model. Expected goals: ${f.home.name} ${prediction.expectedGoals![0].toFixed(2)}, ${f.away.name} ${prediction.expectedGoals![1].toFixed(2)}. Double-chance calibration has not been separately evaluated.`;
+          modelReason+=' '+recentForm;
+          const priceReason=quote?`At ${quote.decimal.toFixed(2)} odds, fair model odds are ${fairOdds.toFixed(2)}. The margin-removed market chance is ${pct(quote.marketProbability)} (${edge!>=0?'+':''}${(edge!*100).toFixed(1)} percentage points of model edge${push?', conditional on a decisive game':''}).`:'No complete bookmaker quote is available for a price comparison.';
           const cautions:string[]=[];
-          if(sport==='nba') {cautions.push('Uses team-history probability; the unvalidated roster scenario is shown separately.');const flagged=(e.side==='home'?roster?.home:roster?.away)?.filter(p=>p.injury).length||0;if(flagged)cautions.push(`${selected.abbr} has ${flagged} provider injury flags. Verify the active lineup; flags are not automatic exclusions.`);}
-          else cautions.push('The PL scoring model has no confirmed lineup adjustment.');
-          return {id:`${f.id}:${e.key}:${e.line??''}:${book}`,fixtureId:f.id,sport,matchup:`${f.away.name} at ${f.home.name}`,start:f.start,label:e.label,market,side:e.side,probability:e.p,fairOdds:1/e.p,quote,edge,ev,eligible,suggestionEligible,experimental:e.experimental,reason:modelReason+' '+priceReason,cautions};
+          if(sport==='nba') {cautions.push('Displayed probabilities include an unvalidated roster/availability adjustment; the 63.1% historical accuracy applies only to the team-history baseline. News headlines supply context, not an automatic numerical sentiment boost.');const selected=e.side==='home'?f.home:f.away;const flagged=(e.side==='home'?roster?.home:roster?.away)?.filter(p=>p.injury).length||0;if(flagged)cautions.push(`${selected.abbr} has ${flagged} provider injury flags. Only recent Out/inactive reports within 48 hours of tip-off exclude a player; uncertain or dated flags stay unconfirmed.`);}
+          else if(sport==='nfl')cautions.push(`NFL final-tie estimate: ${pct(push)}. Moneyline fair odds assume tied games are voided; a tie may reduce the final slip payout. Quarterback/injury effects are not modeled.`);
+          else if(sport==='nhl')cautions.push('Full-game winner includes overtime/shootout. Starting goalie and skater availability are not modeled.');
+          else cautions.push('This scoring model has no confirmed lineup adjustment. Recent results are part of the recency-weighted training data; a last-five summary is context, not a separately fitted form coefficient.');
+          return {id:`${f.id}:${e.key}:${e.line??''}:${book}`,fixtureId:f.id,sport,matchup:`${f.away.name} at ${f.home.name}`,start:f.start,label:e.label,market,side:e.side,probability:e.p,fairOdds,quote,edge,ev,eligible,suggestionEligible,experimental:e.experimental,reason:modelReason+' '+priceReason,cautions,pushProbability:push};
         });
-        all.push({...f,prediction,roster,options,note:f.preseason?'Preseason: context only; excluded from suggested slips.':f.unsupported?'This competition is outside the regular-season model.':prediction.unknownTeam?'Neutral prior used for a club without Premier League history.':undefined});
+        all.push({...f,prediction,roster,context,options,note:f.preseason?'Preseason: context only; excluded from suggested slips.':f.unsupported?'This competition is outside the regular-season model.':prediction.unknownTeam?'Neutral prior used for a club without earlier history in this league.':sport==='nba'&&roster?'Roster-aware estimate · unvalidated extension. Expand Match insights for baseline, transfers, injuries and sources.':sport==='nfl'?`NFL: ${(100*(prediction.draw||0)).toFixed(2)}% estimated final-tie probability. Check bookmaker tie settlement.`:sport==='nhl'?'Full-game winner includes overtime/shootout. Goalie availability is not modeled.':undefined});
       }catch {messages.push(`No supported model forecast for ${f.away.name} at ${f.home.name}.`);}
     }
-    const errors=await cached<string[]>(`health:odds:${sport}`);if(errors)messages.push(...errors.value);
+    const errors=await cached<string[]>(`health:odds:${sport}:${date}:${book}`);if(errors)messages.push(...errors.value);
   }
-  return {date,today,fixtures:all.sort((a,b)=>a.start.localeCompare(b.start)),book,generatedAt:new Date().toISOString(),counts:{nba:mergedNba.filter(g=>g.completed).length,epl:mergedPl.length},health:{fixturesAt:fixtureTimes.sort()[0]||null,resultsAt:resultsTimes.sort()[0]||null,rosterAt:rosterTimes.sort()[0]||seed.snapshot,oddsAt:oddsTimes.sort()[0]||null,keyConfigured:!!env.THERUNDOWN_API_KEY,messages:[...new Set(messages)],playerGamesMissing:(nbaCurrent?.value||[]).filter(g=>g.completed&&!boxes?.value.processed.includes(g.id)).length}};
+  return {date,today,sportFilter,fixtures:all.sort((a,b)=>a.start.localeCompare(b.start)),book,generatedAt:new Date().toISOString(),counts,evaluations:extraSeed.evaluations,health:{fixturesAt:fixtureTimes.sort()[0]||null,resultsAt:resultsTimes.sort()[0]||null,rosterAt:rosterTimes.sort()[0]||seed.snapshot,oddsAt:oddsTimes.sort()[0]||null,keyConfigured:!!env.THERUNDOWN_API_KEY,messages:[...new Set([...messages,...(nbaHealth?.value||[])])],playerGamesMissing:(current.nba?.value||[]).filter(g=>g.completed&&!boxes?.value.processed.includes(g.id)).length}};
 }

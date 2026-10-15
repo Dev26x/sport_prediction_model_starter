@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Matchday — NBA & Premier League",
-  description: "Your private NBA and Premier League research dashboard. Fixtures, model probabilities, market comparisons and editable research slips.",
+  title: "Matchday — Multi-Sport Models",
+  description: "Your private NBA, NFL, NHL, EPL, La Liga and Serie A research dashboard. Fixtures, model probabilities, market comparisons and editable research slips.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
