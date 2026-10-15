@@ -1,0 +1,9 @@
+import { getChatGPTUser } from '../../../chatgpt-auth';
+import { analyzeDailyGame,dailySgpDashboard } from '@/lib/sgp-daily';
+import { refreshSgp } from '@/lib/sgp-service';
+import { validateInput } from '@/lib/service';
+import { acquireLease,releaseLease } from '@/lib/storage';
+import { z } from 'zod';
+const Input=z.object({date:z.string(),sport:z.enum(['nba','nfl']).optional(),fixture:z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).optional()});
+export async function GET(request:Request){if(!await getChatGPTUser())return Response.json({error:'Sign in to view daily player-prop research.'},{status:401});try{const v=Input.parse(Object.fromEntries(new URL(request.url).searchParams));validateInput(v.date,v.sport||'all','23');return Response.json(v.fixture&&v.sport?await analyzeDailyGame(v.date,v.sport,v.fixture):await dailySgpDashboard(v.date),{headers:{'Cache-Control':'private, no-store'}});}catch(e){return Response.json({error:(e as Error).message},{status:400});}}
+export async function POST(request:Request){if(!await getChatGPTUser())return Response.json({error:'Sign in to update player data.'},{status:401});if(request.headers.get('origin')!==new URL(request.url).origin)return Response.json({error:'Invalid request origin.'},{status:403});let token:string|null=null;try{const v=Input.parse(await request.json());validateInput(v.date,v.sport||'all','23');if(!v.sport||!v.fixture)throw new Error('Choose a published NBA/NFL fixture.');token=await acquireLease();if(!token)return Response.json({error:'Another data update is running. Retry shortly.'},{status:409});const result=await refreshSgp(v.date,v.sport,v.fixture);await analyzeDailyGame(v.date,v.sport,v.fixture);return Response.json(result,{headers:{'Cache-Control':'no-store'}});}catch(e){return Response.json({error:(e as Error).message},{status:400});}finally{if(token)await releaseLease(token);}}

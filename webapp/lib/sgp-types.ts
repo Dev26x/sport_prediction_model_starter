@@ -10,3 +10,6 @@ export type SgpJoint={probability:number;fairOdds:number|null;simulationInterval
 export type SgpSuggestion={id:'40'|'jackpot';title:string;legs:SgpCandidate[];joint:SgpJoint|null;targetReached:boolean;reason:string};
 export type SgpAnalysis={fixture:Fixture;asOf:string;candidates:SgpCandidate[];suggestions:SgpSuggestion[];excluded:{player:string;reason:string}[];rosterAt:string|null;historyAt:string;lastResult:string|null;currentGames:number;news:{title:string;url:string;publishedAt:string|null}[];notes:string[];generatedAt:string;modelVersion:string};
 export type SgpResponse={date:string;sport:SgpSport;fixtures:Fixture[];analysis:SgpAnalysis|null;messages:string[];nextDate?:string};
+export type SgpPrefixSet={fixture:Fixture;candidates:SgpCandidate[];prefixes:{indices:number[];joint:SgpJoint}[];generatedAt:string;modelVersion:string;inputRevision?:string};
+export type DailySgpSuggestion={id:'40'|'jackpot';groups:{fixture:Fixture;legs:SgpCandidate[];joint:SgpJoint}[];probability:number|null;fairOdds:number|null;targetReached:boolean;reason:string};
+export type DailySgpResponse={date:string;fixtures:Fixture[];ready:number;missing:Fixture[];suggestions:DailySgpSuggestion[];generatedAt:string};

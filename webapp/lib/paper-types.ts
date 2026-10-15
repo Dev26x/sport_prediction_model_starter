@@ -1,0 +1,10 @@
+import type { Option,Sport } from './types';
+import type { SlipProfileId } from './slips';
+export type PaperPriceBasis='quoted-current'|'quoted-dated'|'mixed'|'model';
+export type PaperLegResult={id:string;state:'pending'|'won'|'lost'|'void'|'review';homeScore:number|null;awayScore:number|null;status:string;checkedAt:string|null;source:string|null};
+export type PaperFrozen={profile:SlipProfileId;legs:Option[];odds:number|null;probability:number|null;targetReached:boolean;reason:string;priceBasis:PaperPriceBasis;capturedAt:string;modelVersion:string};
+export type PaperRecord={id:string;day:string;profile:SlipProfileId;frozen:PaperFrozen;stakeCents:number;status:'pending'|'won'|'lost'|'void'|'skipped';grossCents:number;results:PaperLegResult[];unresolvedLegs:number;settledAt:string|null;checkedAt:string|null};
+export type PaperResult={fixtureId:string;sport:Sport;homeId:string;awayId:string;completed:boolean;homeScore:number|null;awayScore:number|null;status:string;voided:boolean;at:string;source:string};
+export type PaperSnapshot={day:string;capturedAt:string;modelVersion:string;book:string;asOf:string;fixtures:number;eligibleFixtures:number;startedOmitted:number;dataMessages:string[];captureReason:string};
+export type PaperSummary={openingCents:number;cashCents:number;openStakeCents:number;equityCents:number;profitCents:number;settledStakeCents:number;roi:number|null;cashRate:number|null;won:number;lost:number;voided:number;pending:number;skipped:number;stakedCents:number;priceGroups:{basis:PaperPriceBasis;won:number;lost:number;pending:number;profitCents:number}[];curve:{at:string;equityCents:number}[];maxDrawdownCents:number};
+export type PaperDashboard={today:string;days:PaperSnapshot[];slips:PaperRecord[];summary:PaperSummary;updatedAt:string;messages:string[];automation:{configured:boolean;description:string}};

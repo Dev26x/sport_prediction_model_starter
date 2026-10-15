@@ -1,6 +1,6 @@
 import { normalCdf } from './models';
 import type { Fixture } from './types';
-import type { SgpCandidate,SgpDataset,SgpJoint,SgpSuggestion,PlayerLog,SgpRosterPlayer,SgpSport } from './sgp-types';
+import type { SgpCandidate,SgpDataset,SgpJoint,SgpSuggestion,PlayerLog,SgpRosterPlayer,SgpSport,SgpPrefixSet,DailySgpSuggestion } from './sgp-types';
 
 export const SGP_MODEL_VERSION='player-copula-v1.1';
 const clamp=(n:number,lo:number,hi:number)=>Math.max(lo,Math.min(hi,n));
@@ -123,5 +123,30 @@ export function suggestedSgps(data:SgpDataset,candidates:SgpCandidate[],before:s
   const joint=indices.length?jointSummary(indices,candidates,masks,correlation):null,odds=joint?.fairOdds,targetReached=!!odds&&odds>=min&&odds<=max;
   const reason=!indices.length?'No player milestones passed the history, role and availability checks.':targetReached?'Target reached using the fixed, data-supported milestones. Joint chance includes measured and shrunk game-level dependencies.':`Target not reached with the supported player milestones${joint?.unresolved?'; too few simulated joint successes for a stable price':''}. No tougher line or low-probability leg was added to force the target.`;
   return {id,title:id==='40'?'40–60 odds':'Jackpot · 1000+',legs:indices.map(i=>candidates[i]),joint,targetReached,reason} satisfies SgpSuggestion;
+ });
+}
+export function sgpPrefixes(data:SgpDataset,candidates:SgpCandidate[],before:string,sport:SgpSport){
+ const correlation=correlationMatrix(data,candidates,before,sport),masks=simulationMasks(candidates,correlation.L),indices:number[]=[],prefixes:SgpPrefixSet['prefixes']=[];let hits=65536;
+ while(indices.length<candidates.length){let best=-1,bestHits=-1;for(let i=0;i<candidates.length;i++){if(indices.includes(i)||indices.some(j=>!compatibleProps(candidates[i],candidates[j],sport)))continue;const count=maskHits([...indices,i],masks);if(count>bestHits&&count<hits){best=i;bestHits=count;}}if(best<0)break;indices.push(best);hits=bestHits;const joint=jointSummary(indices,candidates,masks,correlation);if(joint.unresolved)break;prefixes.push({indices:[...indices],joint});}
+ return prefixes;
+}
+export function aggregateSgps(sets:SgpPrefixSet[]):DailySgpSuggestion[]{
+ const unique=[...new Map(sets.filter(s=>s.fixture.sport==='nba'||s.fixture.sport==='nfl').map(s=>({...s,prefixes:s.prefixes.filter(p=>!p.joint.unresolved&&p.joint.probability>0&&p.joint.probability<1&&p.joint.fairOdds!==null&&Number.isFinite(p.joint.fairOdds)&&p.joint.fairOdds>1&&new Set(p.indices).size===p.indices.length&&p.indices.every(i=>i>=0&&i<s.candidates.length))})).map(s=>[`${s.fixture.sport}:${s.fixture.id}`,s])).values()];
+ return (['40','jackpot'] as const).map(id=>{
+  const min=id==='40'?40:1000,max=id==='40'?60:Infinity,minimum=Math.log(min),maximum=Math.log(max),width=.002;
+  type State={cost:number;probability:number;choices:{game:number;prefix:number}[]};let states=new Map<number,State>([[0,{cost:0,probability:1,choices:[]}]]),best:State|null=null;
+  // Dynamic search over strongest compatible within-game prefixes. Bins bound
+  // computation, not the number of games/legs. Exact products verify targets.
+  for(let g=0;g<unique.length;g++){
+   const next=new Map(states);for(const state of states.values())for(let p=0;p<unique[g].prefixes.length;p++){
+    const joint=unique[g].prefixes[p].joint;if(joint.unresolved||!joint.fairOdds||joint.probability<=0||joint.probability>=1)continue;
+    const probability=state.probability*joint.probability,cost=-Math.log(probability);if(cost>maximum+1e-12||best&&cost>=best.cost)continue;
+    const value:State={cost,probability,choices:[...state.choices,{game:g,prefix:p}]},product=1/probability;
+    if(cost>=minimum&&product>=min&&product<=max){if(!best||cost<best.cost)best=value;continue;}
+    const bucket=Math.floor(cost/width),old=next.get(bucket);if(!old||cost<old.cost)next.set(bucket,value);
+   }states=next;
+  }
+  const choices=best?.choices||unique.flatMap((s,game)=>s.prefixes.length?[{game,prefix:s.prefixes.length-1}]:[]),groups=choices.map(c=>{const s=unique[c.game],p=s.prefixes[c.prefix];return {fixture:s.fixture,legs:p.indices.map(i=>s.candidates[i]),joint:p.joint};}),probability=groups.length?groups.reduce((p,g)=>p*g.joint.probability,1):null,fairOdds=probability&&Number.isFinite(1/probability)?1/probability:null,targetReached=!!best&&fairOdds!==null&&fairOdds>=min&&fairOdds<=max;
+  return {id,groups,probability,fairOdds,targetReached,reason:!groups.length?'No supported upcoming NBA/NFL player props on this date.':targetReached?'Daily target reached using the strongest supported per-game prefixes. Correlations stay inside each game; separate games are multiplied under an independence assumption.':'Target not reached with the supported fixed milestones. The available supported groups are shown; no harder line or low-probability prop was introduced.'};
  });
 }

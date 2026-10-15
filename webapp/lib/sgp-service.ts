@@ -11,7 +11,7 @@ import type { Fixture,NbaGame } from './types';
 import type { NewsItem } from './nba-context';
 async function baseData(sport:SgpSport):Promise<SgpDataset>{return (sport==='nba'?(await import('./sgp-nba-seed.json')).default:(await import('./sgp-nfl-seed.json')).default) as unknown as SgpDataset;}
 type Updates={players:Record<string,SgpPlayer>;processed?:string[];games?:SgpDataset['games']};
-async function dataset(sport:SgpSport){const base=await baseData(sport),update=await cached<Updates>(`sgp:players:${sport}`);const d=update?.value.games?{...base,games:update.value.games}:base;return {data:update?mergePlayerUpdates(d,update.value.players):d,at:update?.at||base.snapshot};}
+export async function dataset(sport:SgpSport){const base=await baseData(sport),update=await cached<Updates>(`sgp:players:${sport}`);const d=update?.value.games?{...base,games:update.value.games}:base;return {data:update?mergePlayerUpdates(d,update.value.players):d,at:update?.at||base.snapshot};}
 function espnTeam(f:Fixture,team:Fixture['home']){return team.espnId||(f.sport==='nba'?team.id:extraSeed.margin.nfl.teams.find(t=>t.id===team.id)?.espn_id);}
 async function json(url:string){const r=await fetch(url,{redirect:'follow',signal:AbortSignal.timeout(15000)});if(!r.ok)throw new Error(`Public player source returned HTTP ${r.status}.`);return r.json() as Promise<any>;}
 export async function refreshSgp(date:string,sport:SgpSport,fixtureId:string){
@@ -43,7 +43,7 @@ export async function sgpDashboard(date:string,sport:SgpSport,fixtureId:string):
  if(!f){let nextDate:string|undefined;for(let i=1;i<=8;i++){const next=addDays(date,i);if(next>'2027-06-30')break;if((await researchFixtures(next,sport)).some(g=>!g.completed&&!g.preseason&&!g.unsupported)){nextDate=next;break;}}return {date,sport,fixtures,analysis:null,messages:health?.value||[],nextDate};}
  const {data,at}=await dataset(sport),today=localDay(Date.now()),before=date<today?date:today,rosters:Record<string,SgpRosterPlayer[]>={},stamps:string[]=[],news:NewsItem[]=[];
  for(const team of [f.home,f.away]){const r=await cached<SgpRosterPlayer[]>(`sgp:roster:${sport}:${team.id}`);rosters[team.id]=r?.value||data.rosters[team.id]||[];stamps.push(r?.at||data.snapshot);const n=await cached<NewsItem[]>(`sgp:news:${sport}:${team.id}`);news.push(...n?.value||[]);}
- const rosterAt=stamps.sort()[0]||null,cacheKey=`sgp:analysis:${SGP_MODEL_VERSION}:${sport}:${date}:${f.id}`,old=await cached<{inputs:string;analysis:SgpAnalysis}>(cacheKey),inputs=JSON.stringify([at,stamps,f.start,f.status,f.completed]);
+ const rosterAt=stamps.sort()[0]||null,cacheKey=`sgp:analysis:${SGP_MODEL_VERSION}:${sport}:${date}:${f.id}`,old=await cached<{inputs:string;analysis:SgpAnalysis}>(cacheKey),inputs=JSON.stringify([before,at,stamps,f.start,f.status,f.completed]);
  if(old&&old.value.inputs===inputs&&fresh(old.at,30)&&Date.parse(f.start)>Date.now())return {date,sport,fixtures,analysis:old.value.analysis,messages:health?.value||[]};
  const unavailable=f.completed||f.preseason||f.unsupported||Date.parse(f.start)<=Date.now()||date<today;
  const evaluated=unavailable?{candidates:[],excluded:[]}:playerCandidates(data,f,before,rosters),notes=[
