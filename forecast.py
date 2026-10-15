@@ -9,13 +9,14 @@ import numpy as np
 import pandas as pd
 
 import model_v2
-from backtest import MODEL_CONFIG, PROBABILITY_KEYS
+from model_v2 import MODEL_CONFIG, PROBABILITY_KEYS
 from data_utils import DATA_PATH, load_matches, today
 from evaluation import OUTCOMES, apply_temperature
 
 
-def load_calibrator(path, prediction_date):
-    artifact = json.loads(Path(path).read_text())
+def validate_calibrator(artifact, prediction_date):
+    if not isinstance(artifact, dict):
+        raise ValueError("Calibration artifact must be a JSON object.")
     if (artifact.get("schema_version") != 1 or artifact.get("model") != "model_v2"
             or artifact.get("model_config") != MODEL_CONFIG
             or artifact.get("method") != "temperature_scaling_1x2"):
@@ -30,6 +31,10 @@ def load_calibrator(path, prediction_date):
     if not np.isfinite(temperature) or temperature <= 0:
         raise ValueError("Calibration temperature must be finite and positive.")
     return artifact
+
+
+def load_calibrator(path, prediction_date):
+    return validate_calibrator(json.loads(Path(path).read_text()), prediction_date)
 
 
 def forecast(matches, home, away, prediction_date, allow_new_team=False, calibrator=None):
@@ -64,6 +69,7 @@ def forecast(matches, home, away, prediction_date, allow_new_team=False, calibra
         )},
     }
     if calibrator is not None:
+        validate_calibrator(calibrator, prediction_date)
         calibrated = apply_temperature(
             [[prediction[key] for key in PROBABILITY_KEYS]], calibrator["temperature"]
         )[0]

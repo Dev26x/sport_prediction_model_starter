@@ -7,6 +7,12 @@ from data_utils import DATA_PATH, load_matches
 HALF_LIFE_DAYS = 180
 PRIOR_MATCHES = 8
 MAX_GOALS = 15
+MODEL_CONFIG = {
+    "half_life_days": HALF_LIFE_DAYS,
+    "prior_matches": PRIOR_MATCHES,
+    "max_goals": MAX_GOALS,
+}
+PROBABILITY_KEYS = ("home_win", "draw", "away_win")
 
 
 def weighted_mean(values, weights):

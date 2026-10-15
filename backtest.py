@@ -22,12 +22,8 @@ from evaluation import (
 )
 
 
-MODEL_CONFIG = {
-    "half_life_days": model_v2.HALF_LIFE_DAYS,
-    "prior_matches": model_v2.PRIOR_MATCHES,
-    "max_goals": model_v2.MAX_GOALS,
-}
-PROBABILITY_KEYS = ("home_win", "draw", "away_win")
+MODEL_CONFIG = model_v2.MODEL_CONFIG
+PROBABILITY_KEYS = model_v2.PROBABILITY_KEYS
 
 
 def probability_columns(name):
@@ -191,6 +187,9 @@ def run_backtest(
 def render_report(summary):
     test = summary["test"]
     calibration = summary["calibration"]
+    raw_loss = summary["metrics"]["V2"]["log_loss"]
+    calibrated_loss = summary["metrics"]["Calibrated"]["log_loss"]
+    calibration_result = "improved" if calibrated_loss < raw_loss else "did not improve"
     lines = [
         "# Premier League forecasting evaluation", "",
         f"Data: {summary['data']['matches']} completed matches, "
@@ -203,6 +202,9 @@ def render_report(summary):
         f"Later test period: {test['evaluated_matches']} / {test['eligible_matches']} fixtures, "
         f"{test['first_match']} through {test['last_match']}, including "
         f"{test['new_team_fixtures']} fixtures using a neutral prior for an unseen team.", "",
+        f"Temperature calibration {calibration_result} test-period log loss "
+        f"(raw {raw_loss:.6f}; calibrated {calibrated_loss:.6f}). "
+        "Raw V2 remains the default forecast.", "",
         "| Forecast | Matches | Accuracy | Brier | Log loss |",
         "| --- | ---: | ---: | ---: | ---: |",
     ]
@@ -239,8 +241,8 @@ def render_report(summary):
         "[provider notes](https://football-data.co.uk/notes.txt). Closing quotes may postdate "
         "the model forecast. This benchmark does not establish an executable betting edge.", "",
         "The supplied files have not been independently authenticated. Neutral priors for "
-        "promoted teams remain unvalidated. xG is available only in the 60 current-season "
-        "rows, so it is excluded from this cross-season comparison. Over/under and BTTS "
+        "promoted teams remain unvalidated. xG is excluded from this cross-season "
+        "comparison because the supplied earlier seasons lack it. Over/under and BTTS "
         "forecasts are not evaluated or calibrated in this report.", "",
         "Raw V2 remains the default forecast; calibrated 1X2 probabilities require explicitly "
         "loading the calibration artifact. A small retrospective sample does not establish "

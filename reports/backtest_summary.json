@@ -1,0 +1,120 @@
+{
+  "calibration": {
+    "schema_version": 1,
+    "model": "model_v2",
+    "model_config": {
+      "half_life_days": 180,
+      "prior_matches": 8,
+      "max_goals": 15
+    },
+    "method": "temperature_scaling_1x2",
+    "temperature": 0.979480304374736,
+    "status": "fitted",
+    "matches": 380,
+    "calibration_first_date": "2025-08-15",
+    "calibration_last_date": "2026-05-24",
+    "fitted_before": "2026-08-01"
+  },
+  "test": {
+    "start": "2026-08-01",
+    "first_match": "2026-08-21",
+    "last_match": "2026-10-12",
+    "eligible_matches": 60,
+    "evaluated_matches": 60,
+    "new_team_fixtures": 2,
+    "market_matches": 60
+  },
+  "metrics": {
+    "V2": {
+      "matches": 60,
+      "accuracy": 0.45,
+      "brier": 0.635845922731407,
+      "log_loss": 1.0553422003777075
+    },
+    "Calibrated": {
+      "matches": 60,
+      "accuracy": 0.45,
+      "brier": 0.6358564316416211,
+      "log_loss": 1.0553552002241073
+    },
+    "Baseline": {
+      "matches": 60,
+      "accuracy": 0.38333333333333336,
+      "brier": 0.6685922512699131,
+      "log_loss": 1.1022990279607587
+    },
+    "Market": {
+      "matches": 60,
+      "accuracy": 0.45,
+      "brier": 0.6322212207881835,
+      "log_loss": 1.049604545751349
+    }
+  },
+  "paired_log_loss_comparisons": {
+    "V2_minus_Baseline": {
+      "matches": 60,
+      "match_dates": 20,
+      "mean_log_loss_difference": -0.046956827583051156,
+      "interval_95": [
+        -0.08572722138800702,
+        -0.015974662750032318
+      ]
+    },
+    "Calibrated_minus_V2": {
+      "matches": 60,
+      "match_dates": 20,
+      "mean_log_loss_difference": 1.2999846399622262e-05,
+      "interval_95": [
+        -0.0016387225414780013,
+        0.0013946071662444208
+      ]
+    },
+    "V2_minus_Market": {
+      "matches": 60,
+      "match_dates": 20,
+      "mean_log_loss_difference": 0.005737654626358812,
+      "interval_95": [
+        -0.07368230836034441,
+        0.08437756473454124
+      ]
+    }
+  },
+  "v1_common_cohort": {
+    "V1": {
+      "matches": 58,
+      "accuracy": 0.4482758620689655,
+      "brier": 0.6426967953488272,
+      "log_loss": 1.065049755719844
+    },
+    "V2": {
+      "matches": 58,
+      "accuracy": 0.4482758620689655,
+      "brier": 0.6426967953488272,
+      "log_loss": 1.065049755719844
+    }
+  },
+  "coverage": {
+    "eligible_matches": 440,
+    "evaluated_matches": 440,
+    "v1_unavailable": 5,
+    "skipped": []
+  },
+  "market": {
+    "columns": [
+      "B365CH",
+      "B365CD",
+      "B365CA"
+    ],
+    "normalization": "(1 / decimal_odds) / sum(1 / decimal_odds)",
+    "role": "Historical closing-price accuracy benchmark; not a timestamped tradable quote.",
+    "source_notes": "https://football-data.co.uk/notes.txt"
+  },
+  "data": {
+    "path": "/Users/hakeembraimah/Documents/sb-model/football_model_starter/data/premier_league_master.csv",
+    "sha256": "9e9be30c6130b03c043eed480b9b818f8b0a9575b3655fd42d4a6ef1a338ec88",
+    "as_of": "2026-10-15",
+    "matches": 820,
+    "first_match": "2024-08-16",
+    "last_match": "2026-10-12"
+  }
+}

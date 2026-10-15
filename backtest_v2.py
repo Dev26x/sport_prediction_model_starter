@@ -1,13 +1,13 @@
 import numpy as np
 import pandas as pd
-from pathlib import Path
 
 import model_v1
 import model_v2
+from data_utils import ROOT
 
 
 TEST_START = pd.Timestamp("2025-08-01")
-OUTPUT_PATH = Path("data/backtest_v2_results.csv")
+OUTPUT_PATH = ROOT / "data/backtest_v2_results.csv"
 
 OUTCOMES = ["H", "D", "A"]
 
@@ -71,8 +71,6 @@ def main():
 
         result = actual_result(match)
 
-        history = matches[matches["Date"] < match_date]
-
         historical_results = history.apply(
             actual_result, axis=1
         )
@@ -108,8 +106,6 @@ def main():
 
     df = pd.DataFrame(results)
 
-    actual = df["Actual"].to_numpy()
-
     print("\nPREMIER LEAGUE MODEL COMPARISON")
     print("--------------------------------")
     print(f"Matches evaluated: {len(df)}")
@@ -123,7 +119,7 @@ def main():
         f"{'Log Loss':>12}"
     )
 
-    print("-" * 48)
+    print("-" * 58)
 
     for name, columns in [
         ("V1", ["V1_H", "V1_D", "V1_A"]),

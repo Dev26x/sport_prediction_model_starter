@@ -18,7 +18,7 @@ SEASONS = {
 def prepare_data(data_dir=ROOT / "data", as_of=None):
     datasets = []
     for season, filename in SEASONS.items():
-        frame = pd.read_csv(Path(data_dir) / filename)
+        frame = pd.read_csv(Path(data_dir) / filename).copy()
         frame["Season"] = season
         datasets.append(frame)
     return validate_matches(pd.concat(datasets, ignore_index=True), as_of=as_of)

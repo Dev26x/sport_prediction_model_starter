@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "model": "model_v2",
+  "model_config": {
+    "half_life_days": 180,
+    "prior_matches": 8,
+    "max_goals": 15
+  },
+  "method": "temperature_scaling_1x2",
+  "temperature": 0.979480304374736,
+  "status": "fitted",
+  "matches": 380,
+  "calibration_first_date": "2025-08-15",
+  "calibration_last_date": "2026-05-24",
+  "fitted_before": "2026-08-01"
+}
