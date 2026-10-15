@@ -1,0 +1,28 @@
+{
+  "sport": "nfl",
+  "as_of": "2026-10-15T05:36:24.753235+00:00",
+  "team_model_only": true,
+  "calibration": {
+    "sport": "nfl",
+    "sigma_scale": 0.9888810674105757,
+    "calibration_season": 2024,
+    "test_season": 2025,
+    "calibration_last_result": "2025-01-05",
+    "fitted_before": "2025-09-04",
+    "settings": {
+      "half_life_days": 365,
+      "team_penalty": 6,
+      "rest_penalty": 100,
+      "rest_cap": 10,
+      "sigma_floor": 7,
+      "min_history": 200
+    },
+    "scope": "team-margin only; player effects not modeled",
+    "test_games": 272,
+    "test_accuracy": 0.5955882352941176,
+    "baseline_always_home_accuracy": 0.5367647058823529,
+    "test_log_loss": 0.6802587959095961,
+    "market_profitability_established": false
+  },
+  "inputs_sha256": "318a0e9888768d700a508eb7da50eb31dfd5d2746a98c5e5efae00e2b4be52d7"
+}

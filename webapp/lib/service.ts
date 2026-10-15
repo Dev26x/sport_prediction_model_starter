@@ -3,6 +3,7 @@ import rawSeed from './seed.json';
 import { cached, putCache, fresh } from './storage';
 import { localDay, addDays, fitNba, nbaPrediction, normalCdf, plPrediction } from './models';
 import { normalizeQuotes, plName } from './markets';
+import { ODDS_CACHE_MINUTES } from './refresh-policy';
 import type { DashboardData, Fixture, MatchCard, NbaGame, PlGame, RosterPlayer, Sport, Option, Quote } from './types';
 
 type PlayerPrior={name:string;minutes:number;mpg:number;features:Record<string,number>;impact:number};
@@ -16,13 +17,21 @@ export function validateInput(date:string,sport:string,book:string) {
   if(!['all','nba','epl'].includes(sport)||!BOOKS[book])throw new Error('Invalid league or bookmaker.');
 }
 async function fetchJson(url:string,headers?:Record<string,string>) {
-  const response=await fetch(url,{headers:{Accept:'application/json',...headers},redirect:'error',signal:AbortSignal.timeout(15000)});
+  // Workers supports manual/follow only. Never forward the API key across redirects.
+  const response=await fetch(url,{headers:{Accept:'application/json',...headers},redirect:'manual',signal:AbortSignal.timeout(15000)});
   if(!response.ok)throw new Error(response.status===401||response.status===403?'Provider access was denied. Check the API plan/key.':response.status===429?'Provider rate limit reached. Wait before refreshing.':`Data provider returned HTTP ${response.status}.`);
   return {data:await response.json() as any,headers:response.headers};
 }
 async function pool<T,R>(items:T[],fn:(item:T)=>Promise<R>,concurrency=5):Promise<PromiseSettledResult<R>[]> {
   const results:PromiseSettledResult<R>[] = Array(items.length);let next=0;
-  await Promise.all(Array.from({length:Math.min(concurrency,items.length)},async()=>{while(next<items.length){const i=next++;try{results[i]={status:'fulfilled',value:await fn(items[i])};}catch(reason){results[i]={status:'rejected',reason};}}));return results;
+  await Promise.all(Array.from({length:Math.min(concurrency,items.length)}, async () => {
+    while (next < items.length) {
+      const i = next++;
+      try { results[i] = {status:'fulfilled',value:await fn(items[i])}; }
+      catch (reason) { results[i] = {status:'rejected',reason}; }
+    }
+  }));
+  return results;
 }
 export function parseEvents(payload:any,sport:Sport):Fixture[] {
   const out:Fixture[]=[];
@@ -39,7 +48,7 @@ export function parseEvents(payload:any,sport:Sport):Fixture[] {
   }
   return out;
 }
-async function fixtureList(date:string,sport:Sport) {
+async function fixtureList(date:string,sport:Sport):Promise<{value:Fixture[];at:string|null}> {
   const entry=await cached<Fixture[]>(`fixtures:${sport}:${date}`);
   if(entry)return entry;
   const publicSnapshot=seed.fixtures[`${sport}:${date}`];
@@ -77,7 +86,7 @@ export async function refreshSources(date:string,sports:Sport[]) {
     } else {
       const old=await cached<PlGame[]>('epl:current');if(fresh(old?.at,60)){messages.push('PL results were checked within the last hour.');continue;}
       try {
-        const response=await fetch('https://www.football-data.co.uk/mmz4281/2627/E0.csv',{redirect:'error',signal:AbortSignal.timeout(15000)});
+        const response=await fetch('https://football-data.co.uk/mmz4281/2627/E0.csv',{redirect:'manual',signal:AbortSignal.timeout(15000)});
         if(!response.ok)throw new Error(`Results feed returned HTTP ${response.status}.`);
         const rows=parseCsv(await response.text()),matches:PlGame[]=[];
         for(const r of rows){if(!r.Date||!r.HomeTeam||!r.AwayTeam||r.FTHG===''||r.FTAG==='')continue;const [d,m,y]=r.Date.split('/');const day=`${y.length===2?'20'+y:y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;const hp=Number(r.FTHG),ap=Number(r.FTAG);if(day>='2026-07-01'&&day<=localDay(Date.now())&&Number.isInteger(hp)&&hp>=0&&Number.isInteger(ap)&&ap>=0)matches.push({day,home:r.HomeTeam,away:r.AwayTeam,hp,ap});}
@@ -133,17 +142,30 @@ export async function refreshOdds(date:string,sport:Sport,book:string) {
   if(!env.THERUNDOWN_API_KEY) return {messages:['TheRundown runtime key is not configured. Model probabilities remain available.']};
   if(date<localDay(Date.now()))return {messages:['Historical dates show model estimates/results; current odds are not joined to past games.']};
   const key=`odds:${sport}:${date}:${book}`,old=await cached<{quotes:Quote[];usage:Record<string,string>}> (key);
-  if(fresh(old?.at,5))return {messages:['Odds checked within the last five minutes; cached snapshot reused to protect your quota.']};
+  if(fresh(old?.at,ODDS_CACHE_MINUTES))return {messages:['Odds checked within the last 30 minutes; cached snapshot reused without a new provider request.']};
   const fixtures=(await fixtureList(date,sport)).value.filter(f=>!f.preseason&&!f.unsupported&&!f.completed);
   if(!fixtures.length){await putCache(key,{quotes:[],usage:{}});return {messages:['No supported fixtures to price on this date.']};}
+  const cooldown=await cached<{until:number}>('rundown:cooldown');
+  if(cooldown&&cooldown.value.until>Date.now())return {messages:['TheRundown rate limit cooldown is active. Retaining dated prices.']};
   const quotes:Quote[]=[],usage:Record<string,string>={};let failed=0;
   // Provider calendar is UTC. Fetch both UTC dates for a Toronto calendar day.
   for(const utcDate of [date,addDays(date,1)]) {
     try {
-      const {data,headers}=await fetchJson(`https://therundown.io/api/v2/sports/${sport==='nba'?4:11}/events/${utcDate}?affiliate_ids=${book}&market_ids=${sport==='nba'?'1,2':'1,3'}&main_line=true&hide_closed=true`,{'X-TheRundown-Key':env.THERUNDOWN_API_KEY});
+      // Free access permits one request/second across the account. The database
+      // lease serializes refreshes and this timestamp spaces league/date calls.
+      const previous=await cached<number>('rundown:last-request');
+      const delay=previous?Math.max(0,1200-(Date.now()-previous.value)):0;
+      if(delay)await new Promise(resolve=>setTimeout(resolve,delay));
+      await putCache('rundown:last-request',Date.now());
+      const response=await fetch(`https://therundown.io/api/v2/sports/${sport==='nba'?4:11}/events/${utcDate}?affiliate_ids=${book}&market_ids=${sport==='nba'?'1,2':'1,3'}&main_line=true&hide_closed=true`,{headers:{Accept:'application/json','X-TheRundown-Key':env.THERUNDOWN_API_KEY},redirect:'manual',signal:AbortSignal.timeout(15000)});
+      if(!response.ok){
+        if(response.status===429){const retry=response.headers.get('Retry-After');const wait=retry?(Number.isFinite(Number(retry))?Number(retry)*1000:Date.parse(retry)-Date.now()):60000;await putCache('rundown:cooldown',{until:Date.now()+Math.max(1000,Number.isFinite(wait)?wait:60000)});}
+        throw new Error(response.status===429?'Provider rate limit reached. Wait before refreshing.':response.status===401||response.status===403?'Provider access was denied. Check the API plan/key.':`TheRundown returned HTTP ${response.status}.`);
+      }
+      const data=await response.json(),headers=response.headers;
       const observedAt=new Date().toISOString();quotes.push(...normalizeQuotes(data,fixtures,book,observedAt,sport));
       for(const[k,v]of headers.entries())if(/remaining|datapoints|quota|limit/.test(k)&&!k.includes('key'))usage[k]=v;
-    }catch(e){failed++;await putCache(`health:odds:${sport}`,[(e as Error).message]);}
+    }catch(e){failed++;await putCache(`health:odds:${sport}`,[(e as Error).message]);break;}
   }
   if(failed) return {messages:[`TheRundown ${sport.toUpperCase()}: incomplete refresh; previous quote snapshot retained. Check Data status.`]};
   const unique=[...new Map(quotes.map(q=>[`${q.fixtureId}:${q.market}:${q.side}:${q.line}`,q])).values()];await putCache(key,{quotes:unique,usage});await putCache(`health:odds:${sport}`,[]);
@@ -189,9 +211,19 @@ export async function dashboard(date:string,sportFilter:string,book:string):Prom
           const market=e.key.includes(':')?e.key.split(':')[0]:'moneyline';
           const quote=odds?.value.quotes.find(q=>q.fixtureId===f.id&&q.market===market&&q.side===e.side&&(e.line===undefined||e.line===q.line))||null;
           const edge=quote?e.p-quote.marketProbability:null,ev=quote?e.p*quote.decimal-1:null;
-          const timesGood=fresh(feed.at,360)&&fresh((sport==='nba'?nbaCurrent:plCurrent)?.at,26*60)&&quote&&fresh(quote.observedAt,15)&&Date.parse(quote.observedAt)>=Date.parse(seed.snapshot);
-          const eligible=!!(timesGood&&!e.experimental&&!prediction.unknownTeam&&!f.completed&&!f.preseason&&!f.unsupported&&f.status==='Scheduled'&&Date.parse(f.start)>Date.now()+300000&&e.p>=.55&&edge!==null&&edge>=.025&&ev!==null&&ev>=.02&&date>=today);
-          return {id:`${f.id}:${e.key}:${e.line??''}:${book}`,fixtureId:f.id,sport,matchup:`${f.away.name} at ${f.home.name}`,start:f.start,label:e.label,market,side:e.side,probability:e.p,fairOdds:1/e.p,quote,edge,ev,eligible,experimental:e.experimental};
+          const resultSnapshot=(sport==='nba'?nbaCurrent:plCurrent)?.at;
+          const timesGood=fresh(feed.at,360)&&fresh(resultSnapshot,26*60)&&quote&&fresh(quote.observedAt,ODDS_CACHE_MINUTES)&&Date.parse(quote.observedAt)>=Date.parse(resultSnapshot||seed.snapshot);
+          const supported=!!(timesGood&&!e.experimental&&!prediction.unknownTeam&&!f.completed&&!f.preseason&&!f.unsupported&&f.status==='Scheduled'&&Date.parse(f.start)>Date.now()+300000&&date>=today);
+          const eligible=supported&&e.p>=.55&&edge!==null&&edge>=.025&&ev!==null&&ev>=.02;
+          const suggestionEligible=supported&&market==='moneyline'&&e.p>=.5&&edge!==null&&edge>0&&ev!==null&&ev>0;
+          const pct=(value:number)=>(100*value).toFixed(1)+'%';
+          const selected=e.side==='home'?f.home:f.away;
+          const modelReason=sport==='nba'?`${e.label}: ${pct(e.p)} team-model chance. The opponent-adjusted strength, home court and scheduled rest produce an expected ${f.home.abbr} margin of ${prediction.margin!.toFixed(1)} points.`:`${e.label}: ${pct(e.p)} model chance. Recency-weighted scoring rates project ${prediction.expectedGoals![0].toFixed(2)} goals for ${f.home.name} and ${prediction.expectedGoals![1].toFixed(2)} for ${f.away.name}.`;
+          const priceReason=quote?`At ${quote.decimal.toFixed(2)} odds, fair model odds are ${(1/e.p).toFixed(2)}. The margin-removed market chance is ${pct(quote.marketProbability)} (${edge!>=0?'+':''}${(edge!*100).toFixed(1)} percentage points of model edge).`:'No complete bookmaker quote is available for a price comparison.';
+          const cautions:string[]=[];
+          if(sport==='nba') {cautions.push('Uses team-history probability; the unvalidated roster scenario is shown separately.');const flagged=(e.side==='home'?roster?.home:roster?.away)?.filter(p=>p.injury).length||0;if(flagged)cautions.push(`${selected.abbr} has ${flagged} provider injury flags. Verify the active lineup; flags are not automatic exclusions.`);}
+          else cautions.push('The PL scoring model has no confirmed lineup adjustment.');
+          return {id:`${f.id}:${e.key}:${e.line??''}:${book}`,fixtureId:f.id,sport,matchup:`${f.away.name} at ${f.home.name}`,start:f.start,label:e.label,market,side:e.side,probability:e.p,fairOdds:1/e.p,quote,edge,ev,eligible,suggestionEligible,experimental:e.experimental,reason:modelReason+' '+priceReason,cautions};
         });
         all.push({...f,prediction,roster,options,note:f.preseason?'Preseason: context only; excluded from suggested slips.':f.unsupported?'This competition is outside the regular-season model.':prediction.unknownTeam?'Neutral prior used for a club without Premier League history.':undefined});
       }catch {messages.push(`No supported model forecast for ${f.away.name} at ${f.home.name}.`);}

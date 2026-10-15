@@ -1,8 +1,7 @@
 import type { NbaGame, PlGame } from './types';
 
-export function localDay(value: string | number | Date): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value));
-}
+const DAY_FORMAT = new Intl.DateTimeFormat('en-CA', {timeZone:'America/Toronto',year:'numeric',month:'2-digit',day:'2-digit'});
+export function localDay(value: string | number | Date): string { return DAY_FORMAT.format(new Date(value)); }
 export function days(a: string, b: string) { return Math.round((Date.parse(a + 'T12:00:00Z') - Date.parse(b + 'T12:00:00Z')) / 86400000); }
 export function addDays(day: string, count: number) { return new Date(Date.parse(day + 'T12:00:00Z') + count * 86400000).toISOString().slice(0, 10); }
 export function normalCdf(x: number) {
@@ -22,36 +21,44 @@ function solve(matrix: number[][], vector: number[]) {
   }
   return a.map(row => row[n]);
 }
-function rest(last: string | undefined, day: string) { return last ? Math.max(0, Math.min(3, days(day, last) - 1)) : 3; }
-export function fitNba(games: NbaGame[], before: string) {
+function rest(last: string | undefined, day: string,cap=3) { return last ? Math.max(0, Math.min(cap, days(day, last) - 1)) : cap; }
+export type MarginSettings={halfLife:number;teamPenalty:number;restPenalty:number;restCap:number;sigmaFloor:number;minHistory:number;nflTies?:boolean};
+export const MARGIN_SETTINGS:Record<string,MarginSettings>={
+  nba:{halfLife:365,teamPenalty:35,restPenalty:100,restCap:3,sigmaFloor:5,minHistory:300},
+  nfl:{halfLife:365,teamPenalty:6,restPenalty:100,restCap:10,sigmaFloor:7,minHistory:200,nflTies:true},
+  nhl:{halfLife:180,teamPenalty:20,restPenalty:100,restCap:3,sigmaFloor:1.5,minHistory:600},
+};
+export function fitNba(games: NbaGame[], before: string,settings:MarginSettings=MARGIN_SETTINGS.nba) {
   const history = games.filter(g => g.completed && g.hp !== null && g.ap !== null && localDay(g.start) < before).sort((a,b)=>a.start.localeCompare(b.start));
-  if (history.length < 300) throw new Error('At least 300 earlier regular-season games are required.');
+  if (history.length < settings.minHistory) throw new Error(`At least ${settings.minHistory} earlier regular-season games are required.`);
   const ids = [...new Set(history.flatMap(g => [g.home, g.away]))].sort();
   const ix = new Map(ids.map((id, i) => [id, i])), n = ids.length + 2;
-  const a = Array.from({length:n}, (_,i)=>Array.from({length:n},(_,j)=>i===j ? i<n-2?35:i===n-2?.01:100 : 0));
+  const a = Array.from({length:n}, (_,i)=>Array.from({length:n},(_,j)=>i===j ? i<n-2?settings.teamPenalty:i===n-2?.01:settings.restPenalty : 0));
   const b = Array(n).fill(0), last: Record<string,string> = {}, records: {x:number[];y:number;w:number}[] = [];
   let pending: NbaGame[] = [], current = '';
   for (const g of history) {
     const day = localDay(g.start);
     if (day !== current) { for (const old of pending) {last[old.home]=current;last[old.away]=current;} pending=[];current=day; }
-    const x = Array(n).fill(0); x[ix.get(g.home)!]=1;x[ix.get(g.away)!]=-1;x[n-2]=g.neutral?0:1;x[n-1]=rest(last[g.home],day)-rest(last[g.away],day);
-    const w = 2 ** (-days(before,day)/365), y = g.hp! - g.ap!;
+    const x = Array(n).fill(0); x[ix.get(g.home)!]=1;x[ix.get(g.away)!]=-1;x[n-2]=g.neutral?0:1;x[n-1]=rest(last[g.home],day,settings.restCap)-rest(last[g.away],day,settings.restCap);
+    const w = 2 ** (-days(before,day)/settings.halfLife), y = g.hp! - g.ap!;
     const nonzero=x.map((v,i)=>[v,i]).filter(([v])=>v!==0);
     for(const [v,i] of nonzero) {b[i]+=v*y*w;for(const [v2,j] of nonzero)a[i][j]+=v*v2*w;}
     records.push({x,y,w}); pending.push(g);
   }
   for(const g of pending){last[g.home]=current;last[g.away]=current;}
   const coefficients=solve(a,b), weight=records.reduce((s,r)=>s+r.w,0);
-  const sigma=Math.max(5,Math.sqrt(records.reduce((s,r)=>s+r.w*(r.y-r.x.reduce((v,x,i)=>v+x*coefficients[i],0))**2,0)/weight));
-  return {ids,coefficients,sigma,last,history:history.length,lastResult:current};
+  const sigma=Math.max(settings.sigmaFloor,Math.sqrt(records.reduce((s,r)=>s+r.w*(r.y-r.x.reduce((v,x,i)=>v+x*coefficients[i],0))**2,0)/weight));
+  const tieProbability=settings.nflTies?(records.filter(r=>r.y===0).reduce((s,r)=>s+r.w,0)+2)/(weight+500):0;
+  return {ids,coefficients,sigma,last,history:history.length,lastResult:current,restCap:settings.restCap,tieProbability};
 }
 export function nbaPrediction(model: ReturnType<typeof fitNba>, home: string, away: string, day: string, scale: number, neutral=false, schedule: NbaGame[]=[]) {
   const h=model.ids.indexOf(home),a=model.ids.indexOf(away),n=model.coefficients.length;
   if(h<0||a<0||h===a)throw new Error('Team identity does not match NBA history.');
   const seen={...model.last};
   for(const g of schedule) { const d=localDay(g.start); if(d<day && d>=(seen[g.home]||''))seen[g.home]=d;if(d<day && d>=(seen[g.away]||''))seen[g.away]=d; }
-  const margin=model.coefficients[h]-model.coefficients[a]+(neutral?0:model.coefficients[n-2])+model.coefficients[n-1]*(rest(seen[home],day)-rest(seen[away],day));
-  return {margin,home:normalCdf(margin/(model.sigma*scale)),away:normalCdf(-margin/(model.sigma*scale)),sigma:model.sigma,history:model.history,lastResult:model.lastResult};
+  const margin=model.coefficients[h]-model.coefficients[a]+(neutral?0:model.coefficients[n-2])+model.coefficients[n-1]*(rest(seen[home],day,model.restCap)-rest(seen[away],day,model.restCap));
+  const conditionalHome=normalCdf(margin/(model.sigma*scale)),draw=model.tieProbability;
+  return {margin,home:(1-draw)*conditionalHome,away:(1-draw)*(1-conditionalHome),draw,conditionalHome,sigma:model.sigma,history:model.history,lastResult:model.lastResult};
 }
 export function plPrediction(games: PlGame[], home: string, away: string, before: string) {
   const history=games.filter(g=>g.day<before).map(g=>({...g,w:2**(-days(before,g.day)/180)}));

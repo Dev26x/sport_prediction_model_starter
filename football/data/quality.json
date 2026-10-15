@@ -1,0 +1,118 @@
+{
+  "fetched_at": "2026-10-15T05:35:06.290044+00:00",
+  "historical_seasons": [
+    2023,
+    2024,
+    2025,
+    2026
+  ],
+  "current_season": 2027,
+  "sources": [
+    {
+      "league": "epl",
+      "season": 2023,
+      "url": "https://football-data.co.uk/mmz4281/2223/E0.csv",
+      "sha256": "8442792d3b614c94ea3cf381bd2736805889cc1713169035368fff19c3d02380",
+      "results": 380
+    },
+    {
+      "league": "epl",
+      "season": 2024,
+      "url": "https://football-data.co.uk/mmz4281/2324/E0.csv",
+      "sha256": "b2e057b0ed959f198b0f63d2391c01239f3608e6de5db68edab3f88e04d07ff3",
+      "results": 380
+    },
+    {
+      "league": "epl",
+      "season": 2025,
+      "url": "https://football-data.co.uk/mmz4281/2425/E0.csv",
+      "sha256": "a0fb4e281b6f0e0fce66ac4c6bca53e54686d2db6054b5eb49b90decf161c12f",
+      "results": 380
+    },
+    {
+      "league": "epl",
+      "season": 2026,
+      "url": "https://football-data.co.uk/mmz4281/2526/E0.csv",
+      "sha256": "25b1ecbf34c961fbe9a3a3b3bf906a6c7cf76121d4605ed11a1106cc4d15de7f",
+      "results": 380
+    },
+    {
+      "league": "epl",
+      "season": 2027,
+      "url": "https://football-data.co.uk/mmz4281/2627/E0.csv",
+      "sha256": "04a8db2c0f3b3de7fd05c8b5868e9e80282ee56ff96b28b58dc81af39ee6f171",
+      "results": 60
+    },
+    {
+      "league": "laliga",
+      "season": 2023,
+      "url": "https://football-data.co.uk/mmz4281/2223/SP1.csv",
+      "sha256": "53348112526b5165539df240be350083989bb258f30c0ff7cacbc0165ca7e4b3",
+      "results": 380
+    },
+    {
+      "league": "laliga",
+      "season": 2024,
+      "url": "https://football-data.co.uk/mmz4281/2324/SP1.csv",
+      "sha256": "5323f596c7ed318e4bce95557a369d809d98501fa499ea5f41350cd45cf3c7d9",
+      "results": 380
+    },
+    {
+      "league": "laliga",
+      "season": 2025,
+      "url": "https://football-data.co.uk/mmz4281/2425/SP1.csv",
+      "sha256": "caf6feffad03388a5d681c3210130b15f329b5e23195298428d0d0568e922364",
+      "results": 380
+    },
+    {
+      "league": "laliga",
+      "season": 2026,
+      "url": "https://football-data.co.uk/mmz4281/2526/SP1.csv",
+      "sha256": "5c0e49a163785fcc62fc424942500421d77c8d7c51e7159d1c9c0cad7d1d775f",
+      "results": 380
+    },
+    {
+      "league": "laliga",
+      "season": 2027,
+      "url": "https://football-data.co.uk/mmz4281/2627/SP1.csv",
+      "sha256": "6b3f253d2a7c67bd4fdf25626e6744d65d353063329d98366b13d317ddf39db7",
+      "results": 78
+    },
+    {
+      "league": "seriea",
+      "season": 2023,
+      "url": "https://football-data.co.uk/mmz4281/2223/I1.csv",
+      "sha256": "9960837f37a97ae700f876c87b85a8b7a2f5a5d05a53077830c21b9db8880c45",
+      "results": 380
+    },
+    {
+      "league": "seriea",
+      "season": 2024,
+      "url": "https://football-data.co.uk/mmz4281/2324/I1.csv",
+      "sha256": "343a89db026fe4204ebeabd663cdfee8d02a45457828fc1cb63fa630ca170723",
+      "results": 380
+    },
+    {
+      "league": "seriea",
+      "season": 2025,
+      "url": "https://football-data.co.uk/mmz4281/2425/I1.csv",
+      "sha256": "0973077b99e9f7cba60fa80b8c2ed0c1326fd4950a6243b3fa213f6b51c0c205",
+      "results": 380
+    },
+    {
+      "league": "seriea",
+      "season": 2026,
+      "url": "https://football-data.co.uk/mmz4281/2526/I1.csv",
+      "sha256": "bafbf14aacd7e764bc1fd65ec382cfd4c0bf7038523b065a56dd46b4ac477d49",
+      "results": 380
+    },
+    {
+      "league": "seriea",
+      "season": 2027,
+      "url": "https://football-data.co.uk/mmz4281/2627/I1.csv",
+      "sha256": "8d078639b01bccef852b6ca139199a297fe8421b029a1600b93d88c4b424a94b",
+      "results": 60
+    }
+  ],
+  "player_effects": "Scoring-rate baseline; confirmed lineups and transfers are not numerically modeled."
+}

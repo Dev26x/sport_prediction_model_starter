@@ -1,0 +1,21 @@
+{
+  "sport": "nfl",
+  "fetched_at": "2026-10-15T05:34:52.282863+00:00",
+  "source": "https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv",
+  "historical_counts": {
+    "2022": 271,
+    "2023": 272,
+    "2024": 272,
+    "2025": 272
+  },
+  "historical_seasons": [
+    2022,
+    2023,
+    2024,
+    2025
+  ],
+  "current_season": 2026,
+  "excluded_cancelled_game": "2022 Buffalo-Cincinnati was not completed; no fabricated result.",
+  "player_effects": "Not numerically modeled; team baseline only.",
+  "input_sha256": "5c6a29a526bb23dc81ab00cbb2cfabcaac80d95474f6a84a7e701db48cddd8a2"
+}

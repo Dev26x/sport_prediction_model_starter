@@ -1,0 +1,33 @@
+id,abbr,name,espn_id
+ARI,ARI,Arizona Cardinals,22
+ATL,ATL,Atlanta Falcons,1
+BAL,BAL,Baltimore Ravens,33
+BUF,BUF,Buffalo Bills,2
+CAR,CAR,Carolina Panthers,29
+CHI,CHI,Chicago Bears,3
+CIN,CIN,Cincinnati Bengals,4
+CLE,CLE,Cleveland Browns,5
+DAL,DAL,Dallas Cowboys,6
+DEN,DEN,Denver Broncos,7
+DET,DET,Detroit Lions,8
+GB,GB,Green Bay Packers,9
+HOU,HOU,Houston Texans,34
+IND,IND,Indianapolis Colts,11
+JAX,JAX,Jacksonville Jaguars,30
+KC,KC,Kansas City Chiefs,12
+LV,LV,Las Vegas Raiders,13
+LAC,LAC,Los Angeles Chargers,24
+LAR,LAR,Los Angeles Rams,14
+MIA,MIA,Miami Dolphins,15
+MIN,MIN,Minnesota Vikings,16
+NE,NE,New England Patriots,17
+NO,NO,New Orleans Saints,18
+NYG,NYG,New York Giants,19
+NYJ,NYJ,New York Jets,20
+PHI,PHI,Philadelphia Eagles,21
+PIT,PIT,Pittsburgh Steelers,23
+SF,SF,San Francisco 49ers,25
+SEA,SEA,Seattle Seahawks,26
+TB,TB,Tampa Bay Buccaneers,27
+TEN,TEN,Tennessee Titans,10
+WAS,WAS,Washington Commanders,28

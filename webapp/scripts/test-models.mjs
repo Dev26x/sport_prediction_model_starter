@@ -1,0 +1,33 @@
+import { build } from 'esbuild';
+import { readFile } from 'node:fs/promises';
+import assert from 'node:assert/strict';
+const bundled=await build({stdin:{contents:'export * from "./lib/models"; export * from "./lib/markets";',resolveDir:process.cwd(),loader:'ts'},bundle:true,platform:'node',format:'esm',write:false});
+const m=await import('data:text/javascript;base64,'+Buffer.from(bundled.outputFiles[0].text).toString('base64'));
+const seed=JSON.parse(await readFile('lib/seed.json','utf8')),expected=JSON.parse(await readFile('lib/parity.json','utf8'));
+let checks=0;
+function test(name,fn){fn();checks++;console.log('PASS '+name);}
+function close(a,b,tol=2e-7){assert.ok(Math.abs(a-b)<tol,`${a} != ${b}`);}
+for(const e of expected.nba)test('Python NBA parity '+e.day,()=>{const fit=m.fitNba(seed.nbaGames,e.day),p=m.nbaPrediction(fit,e.home,e.away,e.day,e.day>='2025-10-01'?seed.scale:1);close(p.home,e.p);close(p.margin,e.margin);close(p.sigma,e.sigma);});
+for(const e of expected.pl)test('Python Premier League parity '+e.day,()=>{const p=m.plPrediction(seed.plGames,e.home,e.away,e.day);close(p.home,e.p);close(p.draw,e.draw);close(p.over,e.over);});
+test('Toronto date includes evening UTC rollover',()=>assert.equal(m.localDay('2026-10-21T01:30Z'),'2026-10-20'));
+test('Toronto date handles winter offset',()=>assert.equal(m.localDay('2026-12-21T04:30Z'),'2026-12-20'));
+test('NBA excludes same-day and future results',()=>{const cutoff='2026-10-20',base=m.fitNba(seed.nbaGames,cutoff),fake={...seed.nbaGames[0],id:'future',start:'2026-10-20T18:00Z',hp:500,ap:1};const extra=m.fitNba([...seed.nbaGames,fake,{...fake,id:'later',start:'2026-11-01T20:00Z'}],cutoff);assert.deepEqual(extra.coefficients,base.coefficients);assert.equal(extra.history,base.history);});
+test('PL excludes same-day results',()=>{const base=m.plPrediction(seed.plGames,'Arsenal','Chelsea','2026-10-17'),extra=m.plPrediction([...seed.plGames,{day:'2026-10-17',home:'Arsenal',away:'Chelsea',hp:99,ap:0}],'Arsenal','Chelsea','2026-10-17');assert.deepEqual(base,extra);close(base.home+base.draw+base.away,1);});
+test('New PL club receives flagged neutral prior',()=>assert.equal(m.plPrediction(seed.plGames,'Unknown Club','Chelsea','2026-10-17').unknownTeam,true));
+test('American odds reject off-board sentinel',()=>assert.throws(()=>m.americanToDecimal(.0001)));
+test('American odds convert both signs',()=>{close(m.americanToDecimal(-200),1.5);close(m.americanToDecimal(150),2.5);});
+const start=new Date(Date.now()+2*86400000).toISOString(),observed=new Date().toISOString();
+const fixture={id:'g1',sport:'nba',start,day:m.localDay(start),home:{id:'18',abbr:'NY',name:'New York Knicks'},away:{id:'20',abbr:'PHI',name:'Philadelphia 76ers'},status:'Scheduled',neutral:false,completed:false,preseason:false};
+const participant=(id,price)=>({id,type:'TYPE_TEAM',lines:[{value:'',prices:{23:{price,updated_at:observed}}}]});
+const event=()=>({event_id:'provider',event_date:start,teams:[{team_id:100,abbreviation:'NYK',is_home:true},{team_id:200,abbreviation:'PHI',is_away:true}],markets:[{market_id:1,period_id:0,participants:[participant(100,-150),participant(200,130)]}]});
+const quotes=e=>m.normalizeQuotes({events:[e]},[fixture],'23',observed,'nba');
+test('NBA quotes join provider IDs and abbreviation aliases',()=>{const q=quotes(event());assert.equal(q.length,2);assert.equal(q[0].fixtureId,'g1');close(q.reduce((s,x)=>s+x.marketProbability,0),1);});
+test('Incomplete market is rejected',()=>{const e=event();e.markets[0].participants.pop();assert.equal(quotes(e).length,0);});
+test('Closed quote invalidates complete market',()=>{const e=event();e.markets[0].participants[0].lines[0].prices[23].closed_at=observed;assert.equal(quotes(e).length,0);});
+test('Live markets are excluded',()=>{const e=event();e.markets[0].market_id=41;assert.equal(quotes(e).length,0);});
+test('Different period markets are excluded',()=>{const e=event();e.markets[0].period_id=1;assert.equal(quotes(e).length,0);});
+test('Unknown provider team is rejected',()=>{const e=event();e.teams[0].abbreviation='INVALID';assert.equal(quotes(e).length,0);});
+test('Future last-change timestamps are rejected',()=>{const e=event();e.markets[0].participants[0].lines[0].prices[23].updated_at=new Date(Date.now()+3600000).toISOString();assert.equal(quotes(e).length,0);});
+test('Ambiguous duplicate prices are rejected',()=>{const e=event();e.markets[0].participants.push(participant(100,-160));assert.equal(quotes(e).length,0);});
+test('Premier League requires all three results',()=>{const f={...fixture,sport:'epl',home:{id:'1',abbr:'MCI',name:'Man City'},away:{id:'2',abbr:'CHE',name:'Chelsea'}},e=event();e.teams=[{team_id:100,name:'Manchester City',is_home:true},{team_id:200,name:'Chelsea',is_away:true}];e.markets[0].participants.push({id:999,type:'TYPE_RESULT',name:'Draw',lines:[{value:'',prices:{23:{price:220,updated_at:observed}}}]});const q=m.normalizeQuotes({events:[e]},[f],'23',observed,'epl');assert.equal(q.length,3);close(q.reduce((s,x)=>s+x.marketProbability,0),1);e.markets[0].participants.pop();assert.equal(m.normalizeQuotes({events:[e]},[f],'23',observed,'epl').length,0);});
+console.log(`${checks} model and market checks passed.`);

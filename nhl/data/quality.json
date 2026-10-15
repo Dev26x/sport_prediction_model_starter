@@ -1,0 +1,21 @@
+{
+  "sport": "nhl",
+  "fetched_at": "2026-10-15T05:34:58.251268+00:00",
+  "source": "https://api-web.nhle.com/v1/club-schedule-season/{club}/{season}",
+  "historical_counts": {
+    "2023": 1312,
+    "2024": 1312,
+    "2025": 1312,
+    "2026": 1312
+  },
+  "historical_seasons": [
+    2023,
+    2024,
+    2025,
+    2026
+  ],
+  "current_season": 2027,
+  "score_scope": "Final result including overtime/shootout; binary full-game winner model only.",
+  "franchise_policy": "Arizona and Utah retain separate official team IDs; no invented historical continuity.",
+  "player_effects": "Starting-goalie and skater effects are not numerically modeled."
+}
