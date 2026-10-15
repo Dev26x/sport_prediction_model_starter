@@ -47,7 +47,7 @@ def calculate_team_strengths(
     half_life=HALF_LIFE_DAYS,
     prior_matches=PRIOR_MATCHES,
 ):
-    prediction_date = pd.Timestamp(prediction_date)
+    prediction_date = pd.Timestamp(prediction_date).normalize()
 
     if pd.isna(prediction_date):
         raise ValueError("Prediction date must be valid.")

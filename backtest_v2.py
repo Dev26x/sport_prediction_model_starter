@@ -61,16 +61,13 @@ def main():
         home = match["HomeTeam"]
         away = match["AwayTeam"]
 
-        try:
-            v1 = model_v1.predict_match(
-                matches, home, away, match_date
-            )
-            v2 = model_v2.predict_match(
-                matches, home, away, match_date
-            )
-        except ValueError:
-            # Compare only matches both models can predict.
-            continue
+        v2 = model_v2.predict_match(matches, home, away, match_date)
+        history = matches[matches["Date"] < match_date]
+        known_teams = set(history["HomeTeam"]) | set(history["AwayTeam"])
+        v1_available = home in known_teams and away in known_teams
+        v1 = model_v1.predict_match(matches, home, away, match_date) if v1_available else {
+            "home_win": np.nan, "draw": np.nan, "away_win": np.nan
+        }
 
         result = actual_result(match)
 
@@ -93,6 +90,7 @@ def main():
             "HomeTeam": home,
             "AwayTeam": away,
             "Actual": result,
+            "V1_available": v1_available,
             "V1_H": v1["home_win"],
             "V1_D": v1["draw"],
             "V1_A": v1["away_win"],
@@ -115,9 +113,11 @@ def main():
     print("\nPREMIER LEAGUE MODEL COMPARISON")
     print("--------------------------------")
     print(f"Matches evaluated: {len(df)}")
+    print(f"V1 unavailable (retained for V2): {(~df['V1_available']).sum()}")
 
     print(
         f"\n{'Model':<12}"
+        f"{'Matches':>10}"
         f"{'Accuracy':>12}"
         f"{'Brier':>12}"
         f"{'Log Loss':>12}"
@@ -128,18 +128,20 @@ def main():
     for name, columns in [
         ("V1", ["V1_H", "V1_D", "V1_A"]),
         ("V2", ["V2_H", "V2_D", "V2_A"]),
+        ("V2 common", ["V2_H", "V2_D", "V2_A"]),
         (
             "Baseline",
             ["Baseline_H", "Baseline_D", "Baseline_A"]
         ),
     ]:
-        accuracy, brier, log_loss = calculate_metrics(
-            actual,
-            df[columns].to_numpy()
-        )
+        cohort = df.loc[df["V1_available"]] if name == "V2 common" else df.dropna(subset=columns)
+        if cohort.empty:
+            continue
+        accuracy, brier, log_loss = calculate_metrics(cohort["Actual"], cohort[columns].to_numpy())
 
         print(
             f"{name:<12}"
+            f"{len(cohort):>10}"
             f"{accuracy:>11.2%}"
             f"{brier:>12.4f}"
             f"{log_loss:>12.4f}"
