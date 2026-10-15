@@ -1,0 +1,12 @@
+import type { Fixture } from './types';
+export type SgpSport='nba'|'nfl';
+export type SgpGame=[id:string,day:string,season:number,home:string,away:string];
+export type PlayerLog=[game:number,team:string,minutes:number,...stats:number[]];
+export type SgpPlayer={name:string;position:string;logs:PlayerLog[]};
+export type SgpRosterPlayer={id:string;name:string;position:string;injury:string;injuryAt?:string;depth:number;espnId?:string};
+export type SgpDataset={snapshot:string;source:string;games:SgpGame[];players:Record<string,SgpPlayer>;rosters:Record<string,SgpRosterPlayer[]>;metrics:string[]};
+export type SgpCandidate={id:string;playerId:string;player:string;team:string;opponent:string;metric:number;stat:string;threshold:number;label:string;probability:number;mean:number;lastFive:number[];currentMean:number|null;currentGames:number;historyGames:number;effectiveGames:number;h2hGames:number;h2hMean:number|null;opponentFactor:number;roleFactor:number;projectedMinutes:number|null;reason:string;warnings:string[]};
+export type SgpJoint={probability:number;fairOdds:number|null;simulationInterval:[number,number];hits:number;samples:number;independentProbability:number;measuredPairs:number;totalPairs:number;minPairGames:number;shrink:number;unresolved:boolean};
+export type SgpSuggestion={id:'40'|'jackpot';title:string;legs:SgpCandidate[];joint:SgpJoint|null;targetReached:boolean;reason:string};
+export type SgpAnalysis={fixture:Fixture;asOf:string;candidates:SgpCandidate[];suggestions:SgpSuggestion[];excluded:{player:string;reason:string}[];rosterAt:string|null;historyAt:string;lastResult:string|null;currentGames:number;news:{title:string;url:string;publishedAt:string|null}[];notes:string[];generatedAt:string;modelVersion:string};
+export type SgpResponse={date:string;sport:SgpSport;fixtures:Fixture[];analysis:SgpAnalysis|null;messages:string[];nextDate?:string};

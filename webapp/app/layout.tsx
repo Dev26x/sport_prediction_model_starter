@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Matchday — Multi-Sport Models",
-  description: "Your private NBA, NFL, NHL, EPL, La Liga and Serie A research dashboard. Fixtures, model probabilities, market comparisons and editable research slips.",
+  description: "Your private NBA, NFL, NHL, EPL, La Liga and Serie A research dashboard. Fixtures, model probabilities, market comparisons, editable research slips and NBA/NFL player-prop SGP research.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",

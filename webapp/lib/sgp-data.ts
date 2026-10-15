@@ -1,0 +1,27 @@
+import { canonicalAbbr } from './competitions';
+import { nameKey } from './sgp-model';
+import type { SgpDataset,SgpRosterPlayer,SgpPlayer } from './sgp-types';
+import type { NbaGame } from './types';
+import { localDay } from './models';
+export function csvRows(text:string){const rows:string[][]=[];let row:string[]=[],s='',quoted=false;for(let i=0;i<text.length;i++){const c=text[i];if(c==='"'){if(quoted&&text[i+1]==='"'){s+='"';i++;}else quoted=!quoted;}else if(c===','&&!quoted){row.push(s);s='';}else if(c==='\n'&&!quoted){row.push(s.replace(/\r$/,''));rows.push(row);row=[];s='';}else s+=c;}if(s||row.length){row.push(s.replace(/\r$/,''));rows.push(row);}const headers=rows.shift()||[];if(!headers.includes('player_id')||!headers.includes('game_id'))throw new Error('Player feed schema changed; previous data retained.');return rows.filter(r=>r.length===headers.length).map(r=>Object.fromEntries(headers.map((h,i)=>[h,r[i]])));}
+export function parseNflPlayers(text:string,data:SgpDataset,season:number){
+ const index=new Map(data.games.map((g,i)=>[g[0],i])),players:Record<string,SgpPlayer>={};let rejected=0;
+ for(const r of csvRows(text)){if(Number(r.season)!==season||r.season_type!=='REG'||!['QB','RB','WR','TE','FB'].includes(r.position))continue;const game=index.get(r.game_id);if(game===undefined){rejected++;continue;}const team=canonicalAbbr('nfl',r.team),g=data.games[game];if(![g[3],g[4]].includes(team))throw new Error('NFL player box team mismatch.');const stats=['passing_yards','rushing_yards','receiving_yards','receptions','passing_tds','attempts','carries','targets'].map(k=>Number(r[k]));if(stats.some(v=>!Number.isFinite(v)||!Number.isInteger(v))||stats[3]<0||stats[4]<0)throw new Error('Invalid NFL player production.');const p=players[r.player_id]||{name:r.player_display_name,position:r.position,logs:[]};if(p.logs.some(l=>l[0]===game))throw new Error('Duplicate player game in NFL feed.');p.logs.push([game,team,0,...stats]);players[r.player_id]=p;}
+ if(!Object.keys(players).length)throw new Error('No current NFL offensive player boxes returned; dated history retained.');return {players,rejected};
+}
+export function mergePlayerUpdates(data:SgpDataset,updates:Record<string,SgpPlayer>){const players={...data.players};for(const [id,p]of Object.entries(updates)){const old=players[id];players[id]={...p,logs:[...new Map([...(old?.logs||[]),...p.logs].map(r=>[r[0],r])).values()]};}return {...data,players};}
+export function flattenRoster(value:any[]):any[]{return value.flatMap(v=>Array.isArray(v.items)?flattenRoster(v.items):[v.athlete||v]);}
+export function parseSgpRoster(payload:any,data:SgpDataset,sport:'nba'|'nfl'):SgpRosterPlayer[]{
+ if(!Array.isArray(payload.athletes))throw new Error('Roster feed missing player list.');const names=new Map<string,string[]>();for(const[id,p]of Object.entries(data.players)){const k=nameKey(p.name);names.set(k,[...names.get(k)||[],id]);}
+ const rows=flattenRoster(payload.athletes).filter(p=>p.id&&p.displayName),out:SgpRosterPlayer[]=[];
+ for(const a of rows){const matches=names.get(nameKey(a.displayName))||[],id=sport==='nba'?String(a.id):matches.length===1?matches[0]:null;if(!id)continue;out.push({id,espnId:String(a.id),name:a.displayName,position:a.position?.abbreviation||'',injury:(a.injuries||[]).map((i:any)=>i.status||i.type?.description||'Unconfirmed injury flag').join(', '),injuryAt:a.injuries?.[0]?.date,depth:99});}
+ if(out.length<(sport==='nba'?10:8)||new Set(out.map(p=>p.id)).size!==out.length)throw new Error('Roster is incomplete or ambiguous; previous roster retained.');return out;
+}
+export function parseSgpNbaBox(payload:any,game:NbaGame,index:number):Record<string,SgpPlayer>{
+ if(String(payload.header?.id)!==game.id||!payload.header?.competitions?.[0]?.status?.type?.completed)throw new Error('NBA box is not the requested final game.');const out:Record<string,SgpPlayer>={};let teams=0;
+ for(const team of payload.boxscore?.players||[]){const id=String(team.team?.id);if(![game.home,game.away].includes(id))throw new Error('NBA box team mismatch.');teams++;let points=0,minutes=0;
+  for(const table of team.statistics||[])for(const p of table.athletes||[]){if(p.didNotPlay||!p.stats?.length)continue;const stats=Object.fromEntries((table.keys||[]).map((k:string,i:number)=>[k,p.stats[i]])),time=String(stats.minutes).split(':').map(Number),mins=time[0]+(time[1]||0)/60,values=[Number(stats.points),Number(stats.rebounds??Number(stats.offensiveRebounds)+Number(stats.defensiveRebounds)),Number(stats.assists),Number(String(stats['threePointFieldGoalsMade-threePointFieldGoalsAttempted']).split('-')[0])];if(!p.athlete?.id||![mins,...values].every(v=>Number.isFinite(v)&&v>=0))throw new Error('NBA box has missing player stats.');if(mins<=0)continue;points+=values[0];minutes+=mins;const pid=String(p.athlete.id);if(out[pid])throw new Error('Duplicate NBA player row.');out[pid]={name:p.athlete.displayName,position:p.athlete.position?.abbreviation||'',logs:[[index,id,mins,...values]]};}
+  if(points!==(id===game.home?game.hp:game.ap)||minutes<230)throw new Error('NBA player totals do not reconcile with final team scores.');
+ }if(teams!==2)throw new Error('Incomplete NBA player box.');return out;
+}
+export function appendNbaGames(data:SgpDataset,games:NbaGame[]){const known=new Set(data.games.map(g=>g[0]));return {...data,games:[...data.games,...games.filter(g=>g.completed&&!known.has(g.id)).map(g=>[g.id,localDay(g.start),g.season,g.home,g.away] as SgpDataset['games'][number])]};}
