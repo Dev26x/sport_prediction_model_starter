@@ -1,0 +1,56 @@
+{
+  "modelVersion": "football-markets-v1",
+  "season": "2025–26",
+  "cornerLine": 8.5,
+  "method": "Walk-forward development check. Each fixture uses strictly earlier dates only; no same-day or future results. Individual-market probabilities, not slip calibration. All parameters and the corner line were fixed before this check.",
+  "leagues": {
+    "epl": {
+      "corners": {
+        "games": 368,
+        "brier": 0.22447464195922787,
+        "baselineBrier": 0.2225050832414699,
+        "logLoss": 0.6414162032175501,
+        "accuracy": 0.6603260869565217
+      },
+      "btts": {
+        "games": 372,
+        "brier": 0.24789829317404632,
+        "baselineBrier": 0.24670070449992038,
+        "logLoss": 0.6889847756415178,
+        "accuracy": 0.5268817204301075
+      }
+    },
+    "laliga": {
+      "corners": {
+        "games": 357,
+        "brier": 0.2342084725236233,
+        "baselineBrier": 0.23992750430002846,
+        "logLoss": 0.6606795803618776,
+        "accuracy": 0.6022408963585434
+      },
+      "btts": {
+        "games": 365,
+        "brier": 0.2503072564086766,
+        "baselineBrier": 0.2465459992034513,
+        "logLoss": 0.693943928114464,
+        "accuracy": 0.5232876712328767
+      }
+    },
+    "seriea": {
+      "corners": {
+        "games": 368,
+        "brier": 0.25100183987934604,
+        "baselineBrier": 0.2507441111917873,
+        "logLoss": 0.6950934962978077,
+        "accuracy": 0.5
+      },
+      "btts": {
+        "games": 372,
+        "brier": 0.25099332059836515,
+        "baselineBrier": 0.24953432319386074,
+        "logLoss": 0.6951422503445066,
+        "accuracy": 0.489247311827957
+      }
+    }
+  }
+}

@@ -1,5 +1,8 @@
 import type { Fixture } from './types';
 export type SgpSport='nba'|'nfl';
+export type SgpPool='both'|SgpSport;
+export type SgpModelSport=SgpSport|'wnba';
+export type SgpModelFixture=Pick<Fixture,'id'|'home'|'away'>&{sport:SgpModelSport};
 export type SgpGame=[id:string,day:string,season:number,home:string,away:string];
 export type PlayerLog=[game:number,team:string,minutes:number,...stats:number[]];
 export type SgpPlayer={name:string;position:string;logs:PlayerLog[]};
@@ -12,4 +15,4 @@ export type SgpAnalysis={fixture:Fixture;asOf:string;candidates:SgpCandidate[];s
 export type SgpResponse={date:string;sport:SgpSport;fixtures:Fixture[];analysis:SgpAnalysis|null;messages:string[];nextDate?:string};
 export type SgpPrefixSet={fixture:Fixture;candidates:SgpCandidate[];prefixes:{indices:number[];joint:SgpJoint}[];generatedAt:string;modelVersion:string;inputRevision?:string};
 export type DailySgpSuggestion={id:'40'|'jackpot';groups:{fixture:Fixture;legs:SgpCandidate[];joint:SgpJoint}[];probability:number|null;fairOdds:number|null;targetReached:boolean;reason:string};
-export type DailySgpResponse={date:string;fixtures:Fixture[];ready:number;missing:Fixture[];suggestions:DailySgpSuggestion[];generatedAt:string};
+export type DailySgpResponse={date:string;pool:SgpPool;fixtures:Fixture[];ready:number;missing:Fixture[];suggestions:DailySgpSuggestion[];generatedAt:string};

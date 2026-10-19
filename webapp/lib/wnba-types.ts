@@ -1,0 +1,15 @@
+import type { Fixture } from './types';
+import type { SgpCandidate,SgpDataset,SgpJoint } from './sgp-types';
+export type WnbaFixture=Omit<Fixture,'sport'>&{sport:'wnba';gameNumber:number;conditional:boolean;venue:string};
+export type WnbaData=SgpDataset&{phases:Record<string,number>};
+export type WnbaSeed=WnbaData&{fixtures:WnbaFixture[];news:{title:string;url:string;publishedAt:string|null}[];results?:Record<string,WnbaBox>};
+export type WnbaSuggestion={legs:SgpCandidate[];joint:SgpJoint|null;targetReached:boolean;reason:string};
+export type WnbaCandidate=SgpCandidate&{playoffMean:number|null;playoffGames:number};
+export type WnbaBoard={fixtures:WnbaFixture[];fixture:WnbaFixture|null;asOf:string;candidates:WnbaCandidate[];excluded:{player:string;reason:string}[];suggestion:WnbaSuggestion;news:WnbaSeed['news'];historyAt:string;rosterAt:string;lastResult:string|null;playoffGames:number;regularGames:number;messages:string[];needsRefresh:boolean;unavailable:string|null;generatedAt:string;publicCheckedAt:string|null;lineup:import('./sgp-game-context').SgpGameContext|null;review:WnbaGameReview|null;policy:{targetOdds:number;preferredLegs:number;maxLegs:number}};
+export type WnbaBoxPlayer={id:string;name:string;team:string;didNotPlay:boolean;minutes:number;stats:number[];fgMade:number;fgAttempted:number};
+export type WnbaBoxTeam={id:string;name:string;score:number;quarters:number[];fgMade:number;fgAttempted:number;threesMade:number;threesAttempted:number;rebounds:number;assists:number;turnovers:number};
+export type WnbaBox={fixtureId:string;day:string;start:string;completed:true;home:WnbaBoxTeam;away:WnbaBoxTeam;players:Record<string,WnbaBoxPlayer>;url:string;checkedAt:string};
+export type WnbaIssued={fixture:WnbaFixture;asOf:string;issuedAt:string;modelVersion:string;provenance:string;sourceCommit?:string;inputSha256?:string;suggestion:WnbaSuggestion};
+export type WnbaRoleSignal={latestMinutes:number;priorMinutes:number;ratio:number|null;uncertain:boolean};
+export type WnbaReviewLeg={leg:import('./sgp-types').SgpCandidate;state:'hit'|'miss'|'void'|'unresolved';actual:number|null;minutes:number|null;nextProbability:number|null;nextEligible:boolean;explanation:string};
+export type WnbaGameReview={box:WnbaBox;forecast:WnbaIssued|null;legs:WnbaReviewLeg[];hits:number;misses:number;voids:number;unresolved:number;hitRate:number|null;state:'lost'|'all-hit'|'unresolved';expectedMisses:number|null;findings:{title:string;text:string}[];sources:{title:string;url:string}[]};

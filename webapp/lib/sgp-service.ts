@@ -46,7 +46,7 @@ export async function sgpDashboard(date:string,sport:SgpSport,fixtureId:string):
  const rosterAt=stamps.sort()[0]||null,cacheKey=`sgp:analysis:${SGP_MODEL_VERSION}:${sport}:${date}:${f.id}`,old=await cached<{inputs:string;analysis:SgpAnalysis}>(cacheKey),inputs=JSON.stringify([before,at,stamps,f.start,f.status,f.completed]);
  if(old&&old.value.inputs===inputs&&fresh(old.at,30)&&Date.parse(f.start)>Date.now())return {date,sport,fixtures,analysis:old.value.analysis,messages:health?.value||[]};
  const unavailable=f.completed||f.preseason||f.unsupported||Date.parse(f.start)<=Date.now()||date<today;
- const evaluated=unavailable?{candidates:[],excluded:[]}:playerCandidates(data,f,before,rosters),notes=[
+ const evaluated=unavailable?{candidates:[],excluded:[]}:playerCandidates(data,{...f,sport},before,rosters),notes=[
   'Experimental player-prop research model. Probabilities are conditional on participation and projected role; they are not calibrated win rates.',
   'Four completed regular seasons plus available current-season boxes. One-year recency half-life; same-day/future boxes and all preseason results excluded.',
   'Milestones are fixed at the weighted lower quartile, rounded down, before either target is considered. Candidates require 68–95% marginal probability, sufficient history and no unresolved public injury flag.',

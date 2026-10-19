@@ -10,6 +10,8 @@ import { ODDS_CACHE_MINUTES, providerOffsetMinutes } from './refresh-policy';
 import { COMPETITIONS, SPORTS, selectedSports, isFootball, canonicalAbbr } from './competitions';
 import { extraSeed, extraTeam, extraSnapshot, refreshExtraResults } from './extra-data';
 import type { DashboardData, Fixture, MatchCard, NbaGame, PlGame, RosterPlayer, Sport, Option, Quote } from './types';
+import { parseFootballMarketCsv,mergeFootballMarketGames } from './football-market-data';
+import type { FootballSport,FootballMarketGame } from './football-market-types';
 
 type PlayerPrior={name:string;minutes:number;mpg:number;features:Record<string,number>;impact:number};
 type Seed={snapshot:string;nbaGames:NbaGame[];nbaSchedule:NbaGame[];teams:{id:string;abbr:string;name:string}[];plGames:PlGame[];scale:number;translation:Record<string,number>;previousRoster:Record<string,number>;players:Record<string,PlayerPrior>;rosters:Record<string,RosterPlayer[]>;fixtures:Record<string,any>};
@@ -98,14 +100,17 @@ export async function refreshSources(date:string,sports:Sport[]) {
     } else if(sport==='nfl'||sport==='nhl') {
       try {messages.push(...await refreshExtraResults(sport));}catch(e){messages.push(`${COMPETITIONS[sport].label} results: ${(e as Error).message}`);}
     } else {
-      const old=await cached<PlGame[]>(`${sport}:current`);if(fresh(old?.at,60)){messages.push(`${COMPETITIONS[sport].label} results were checked within the last hour.`);continue;}
+      const old=await cached<PlGame[]>(`${sport}:current`),marketOld=await cached<FootballMarketGame[]>(`${sport}:market-current`);if(fresh(old?.at,60)&&fresh(marketOld?.at,60)){messages.push(`${COMPETITIONS[sport].label} goals and corners were checked within the last hour.`);continue;}
       try {
         const response=await fetch(`https://football-data.co.uk/mmz4281/2627/${COMPETITIONS[sport].footballCode}.csv`,{redirect:'manual',signal:AbortSignal.timeout(15000)});
         if(!response.ok)throw new Error(`Results feed returned HTTP ${response.status}.`);
-        const rows=parseCsv(await response.text()),matches:PlGame[]=[];
+        const text=await response.text(),rows=parseCsv(text),matches:PlGame[]=[];
         for(const r of rows){if(!r.Date||!r.HomeTeam||!r.AwayTeam||r.FTHG===''||r.FTAG==='')continue;const [d,m,y]=r.Date.split('/');const day=`${y.length===2?'20'+y:y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;const hp=Number(r.FTHG),ap=Number(r.FTAG);if(day>='2026-07-01'&&day<=localDay(Date.now())&&Number.isInteger(hp)&&hp>=0&&Number.isInteger(ap)&&ap>=0)matches.push({day,home:r.HomeTeam,away:r.AwayTeam,hp,ap});}
         if(matches.length<(extraSeed.football[sport]?.games||[]).filter(g=>g.day>='2026-07-01').length)throw new Error('Result feed is incomplete; previous snapshot retained.');
-        await putCache(`${sport}:current`,matches);messages.push(`${COMPETITIONS[sport].label}: checked ${matches.length} current-season results.`);
+        const parsed=parseFootballMarketCsv(text,sport as FootballSport,2027,localDay(Date.now()));
+        if(parsed.rejected||parsed.games.length<(marketOld?.value.length||0))throw new Error('Goals/corners feed is incomplete or invalid; previous snapshots retained.');
+        await putCache(`${sport}:market-current`,mergeFootballMarketGames(marketOld?.value||[],parsed.games));
+        await putCache(`${sport}:current`,matches);messages.push(`${COMPETITIONS[sport].label}: checked ${matches.length} current-season results, including ${parsed.games.filter(g=>g.hc!==null&&g.ac!==null).length} corner records.`);
       }catch(e){messages.push(`${COMPETITIONS[sport].label} results: ${(e as Error).message}`);}
     }
   }

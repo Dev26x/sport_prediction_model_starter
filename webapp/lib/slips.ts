@@ -37,7 +37,7 @@ export function selectionReason(option:Option) {
  * Branch bounds prune combinations that cannot improve the best probability.
  * The slate itself determines the number of games; there is no leg-count cap.
  */
-export function buildSuggestedSlips(options:Option[],book:string,now=Date.now()):SuggestedSlip[] {
+export function buildSuggestedSlips(options:Option[],book:string,now=Date.now(),scope:{markets?:readonly string[];allowExperimental?:boolean}={}):SuggestedSlip[] {
   const groups=new Map<string,Option[]>();
   for(const o of options) {
     // Optimize win chance for the requested payout range. A modeled value edge
@@ -45,7 +45,7 @@ export function buildSuggestedSlips(options:Option[],book:string,now=Date.now())
     // Dated provider snapshots and clearly labeled model fair prices are research estimates.
     const q=o.quote;
     if(o.market==='doublechance'&&o.side==='home_away')continue;
-    if(!o.suggestionEligible||o.experimental||!['moneyline','doublechance'].includes(o.market)||o.probability<=0||o.probability>=1||!Number.isFinite(o.probability)||!Number.isFinite(Date.parse(o.start))||Date.parse(o.start)<=now+300000)continue;
+    if(!o.suggestionEligible||o.experimental&&!scope.allowExperimental||!(scope.markets||['moneyline','doublechance']).includes(o.market)||o.probability<=0||o.probability>=1||!Number.isFinite(o.probability)||!Number.isFinite(Date.parse(o.start))||Date.parse(o.start)<=now+300000)continue;
     const group=groups.get(o.fixtureId)||[];if(!group.some(p=>p.id===o.id))group.push(o);groups.set(o.fixtureId,group);
   }
   // Fix the most probable supported outcome for each game BEFORE considering

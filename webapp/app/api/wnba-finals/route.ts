@@ -1,0 +1,7 @@
+import { getChatGPTUser } from '../../chatgpt-auth';
+import { wnbaBoard,refreshWnba } from '@/lib/wnba-service';
+import { acquireLease,releaseLease } from '@/lib/storage';
+import { z } from 'zod';
+const Input=z.object({fixture:z.string().regex(/^\d{1,16}$/).optional(),force:z.boolean().optional()});
+export async function GET(request:Request){if(!await getChatGPTUser())return Response.json({error:'Sign in to view WNBA player research.'},{status:401});try{const v=Input.parse(Object.fromEntries(new URL(request.url).searchParams));return Response.json(await wnbaBoard(v.fixture),{headers:{'Cache-Control':'private, no-store'}});}catch(e){return Response.json({error:(e as Error).message},{status:400});}}
+export async function POST(request:Request){if(!await getChatGPTUser())return Response.json({error:'Sign in to refresh WNBA research.'},{status:401});if(request.headers.get('origin')!==new URL(request.url).origin)return Response.json({error:'Invalid request origin.'},{status:403});let token:string|null=null;try{const v=Input.parse(await request.json());token=await acquireLease();if(!token)return Response.json({error:'A data refresh is running. Retry shortly.'},{status:409});const result=await refreshWnba(v.force??true,v.fixture||'');const board=await wnbaBoard(v.fixture||'');return Response.json({...board,messages:result.messages},{headers:{'Cache-Control':'private, no-store'}});}catch(e){return Response.json({error:(e as Error).message},{status:400});}finally{if(token)await releaseLease(token);}}

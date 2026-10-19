@@ -80,6 +80,18 @@ The new folders have independent public-data CLIs. After rebuilding their artifa
 
 The original NBA seed can be regenerated with `webapp/scripts/export-model-seed.py`. Server seed JSON contains public model inputs, no credentials or paid raw odds. D1 stores dated cache records and user-specific slips; it is distinct between local preview and hosted deployment.
 
+## WNBA Finals player-prop page
+
+Open **WNBA Finals** from the workspace or `/wnba-finals`. The dedicated 2026 page covers the seven published Finals fixtures (Games 5–7 are conditional), with an **8+ decimal model-fair odds target**, an eight-prop preference and a strict ten-prop maximum, player-prop explanations, last five results, current-season and playoff averages, opponent context, public injury exclusions and a CAD hypothetical-return calculator. A default CAD 10 stake illustrates CAD 80+ returned including stake when that model target is met. It leaves the daily paper wallet and NBA/NFL daily SGP aggregates unchanged.
+
+The server snapshot contains 27,338 player appearances from 2022–2026, including regular-season and playoff boxes. The page checks free ESPN schedules, rosters/news and the SportsDataverse current-season CSV on entry when its last check is over 30 minutes old; the update button shares that cache. No paid odds API is used. Rebuild the snapshot from `webapp/` with `node scripts/export-wnba-data.mjs`.
+
+WNBA uses calendar seasons and 40-minute games. Fixed lower-quartile player milestones enter the correlation model before the target search. A compatible-subset search first searches up to eight props, then allows nine or ten only when needed. It shows a compact fallback and marks the target missed if 8+ cannot be reached within the cap. The current public probability is the highest joint simulation chance found under that count policy; it is not a demonstrated real-world win rate. Prices are **1 / modeled joint probability**, not bookmaker SGP quotes. Lineup participation is assumed, and WNBA SGP probabilities are not calibrated. Suggestions pause at tipoff, for unresolved schedule status, stale rosters, or missing earlier completed Finals boxes. `npm test` includes WNBA data integrity, target, correlation, no-lookahead and availability checks.
+
+The page includes a postgame review: team/quarter statistics, all original player-line results, missed-line explanations and the next-game reassessment. `lib/wnba-game1-pregame.json` recovers the original 17-line v1 display from the published pregame seed and model, with its input hash and source commit; it is not an actual betting ticket or proof of a later refreshed version. Its thresholds and probabilities remain frozen. The Game 1 review resolves 14 hits and three misses against the reconciled ESPN final box, without treating 82.4% leg hit rate as slip cashing rate. Future compact first-issued forecasts use an insert-only per-fixture archive.
+
+A final box enters history once, with player/team score and minute reconciliation. A miss receives no extra penalty and a hit no bonus. A latest current-team minutes drop below 60% of the preceding ten appearances (at least five earlier appearances and an 18+ minute baseline) triggers a role hold regardless of the last prop outcome. This flags both Bonner’s missed lines and Thornton’s winning rebound line, while Hayes’s shooting miss remains eligible if its updated probability and role pass. The rule is a transparent uncertainty guard, not a validated causal model of coaching decisions. Run `node scripts/export-wnba-review.mjs` after retrieving the current inputs into ignored `work/wnba-review/`; never regenerate the original forecast from postgame data.
+
 ## NBA / NFL player-prop SGP builder
 
 Open **Player-prop SGP** in the workspace, or `/sgp`. Choose an NBA/NFL date and fixture, then **Update player data**. The page has **40–60** and **Jackpot 1000+** targets, player evidence/explanations, current-season averages, last five results, opponent history, exclusions, public news, correlation coverage, a copy/download action and a hypothetical stake illustration. It leaves the personal multi-game slip separate.
@@ -108,4 +120,56 @@ Prices distinguish fresh bookmaker observations, dated quotes, mixed prices and 
 
 The hosted cloud task uses the Site's published `/paper-runner.mjs` and purpose-scoped authenticated updater. Only the hash of the updater key is configured as the private `PAPER_RUNNER_HASH` secret. Follow [PAPER_AUTOMATION.md](./PAPER_AUTOMATION.md) for its verified source/access/readback process. No credentials are stored in the source or schedule. Routine runs make no paid odds requests and do not republish. Local and hosted ledgers are separate; the local page checks results while open. Schema migration `0001_quiet_proudstar.sql` adds only the two paper tables.
 
-**Daily SGP+** (`/sgp/daily`) combines supported NBA/NFL player-prop prefixes across the entire upcoming slate into 40–60 and Jackpot 1000+ research suggestions. The existing within-game correlated simulation is retained for every group; separate game joint probabilities multiply under an explicit independence assumption. A bounded approximate search over strongest per-game prefixes uses 0.002 log-probability bins, with exact target-product checks and no game-count cap. It never toughens a milestone to force a target. Incompatible/nested props remain blocked; unresolved rare-event prices are excluded. Prices and returns are model fair estimates, not bookmaker SGP+ quotes. Daily SGP+ never debits the paper wallet. Use **Update all player data** for current public rosters/news/boxes; the initial analysis reuses available public snapshots.
+**Best across games** is now a builder mode on `/sgp?mode=combined&pool=both`; the existing `/sgp/daily` link opens the same builder. Choose **NBA only**, **NFL only**, or **NBA + NFL**, and a Toronto date. The selected pool is enforced in fixture loading and in the combination search, retained in the URL, and included in copied slips. All eligible games are considered, with one compatible prop group per selected game. Sport coverage and incomplete analysis are shown; a failed game must be retried before the page claims a complete combined result. Switching pools cancels the old request queue. Games within five minutes of starting, postponed games and unsupported fixtures are excluded; a displayed slate that crosses that cutoff is disabled until rebuilt.
+
+**Daily SGP+** combines supported NBA/NFL player-prop prefixes across the entire upcoming slate into 40–60 and Jackpot 1000+ research suggestions. The existing within-game correlated simulation is retained for every group; separate game joint probabilities multiply under an explicit independence assumption. A bounded approximate search over strongest per-game prefixes uses 0.002 log-probability bins, with exact target-product checks and no game-count cap. It never toughens a milestone to force a target. Incompatible/nested props remain blocked; unresolved rare-event prices are excluded. Prices and returns are model fair estimates, not bookmaker SGP+ quotes. Daily SGP+ never debits the paper wallet. Use **Update player data** for current public schedules, rosters, news and boxes in the selected sport pool; the initial analysis reuses available public snapshots. Source caches remain in force, and this feature makes no paid odds requests.
+
+
+## Football corners and BTTS builders
+
+`/football-slips?date=2026-10-17` provides separate corners and BTTS pools for
+EPL, La Liga and Serie A. Both reuse the existing probability-first combination
+search and four normal profiles: 10+, 20–40, 50–200 and Jackpot 500+. No game-count
+cap, opposing-outcome substitution, automatic harder corner line or forced target.
+Unreachable ranges show the supported available set and explicitly miss the target.
+
+The corner line is a user-selected half-integer (6.5–13.5; default 8.5), fixed
+before target search. Suggestions may compare over and under or use an explicit
+one-side filter. BTTS similarly supports best-side, Yes-only and No-only pools.
+Manual picks automatically replace another selection from the same fixture.
+Selection IDs persist in the current browser per date/league/market/line; current
+model prices are used after a reload. Both builders include CAD stake, return and
+profit calculations and copy/download research slips. These markets remain outside
+the normal suggested-slip pools and the shared paper wallet.
+
+`lib/football-markets-seed.json` contains 4,758 dated matches with actual HC/AC
+corner counts: 2022–23 through 2025–26 plus the available 2026–27 games. Sources
+and field definitions: https://www.football-data.co.uk/notes.txt . Reproduce with
+`python3 scripts/export-football-markets.py`; raw CSVs stay in ignored `work/`.
+The existing public football refresh now retains goal and corner columns from the
+same hourly request; incomplete feeds retain their previous snapshot. New-page
+fixture refreshes reuse the 15-minute fixture cache. No TheRundown requests or
+additional paid API access are used by this page.
+
+Corners use venue-specific rates for corners produced/conceded, 180-day recency
+weighting, 12 effective league-prior matches and a negative-binomial total-count
+distribution fitted to league-level overdispersion (Poisson limit if necessary).
+Require 200 earlier league games, 12 corner games per club, five per relevant
+venue. BTTS reuses the existing goal rates and analytic independent-Poisson
+probability that both score; require 200 league games and eight games per club.
+Both exclude same-day/future observations and unsupported fixtures. Probabilities
+are experimental and neither model adjusts for confirmed lineups or weather.
+
+No connected bookmaker quote is available for these markets. Displayed odds are
+model fair odds (1 / probability), so target achievement and returns are research
+illustrations rather than available sportsbook prices. Different-fixture chances
+are multiplied assuming independence. Corners and BTTS for one game are not
+combined as independent events.
+
+`node scripts/evaluate-football-markets.mjs` reproduces the 2025–26 chronological
+single-market development check in `lib/football-markets-evaluation.json`. It fixes
+the 8.5 corner line and all model settings before evaluating each match against
+strictly earlier dates. Results are exposed on the page, including the weighted
+league baseline. BTTS did not outperform that baseline in any of the three leagues;
+corners did so only in La Liga. No demonstrated betting edge or calibrated slip
+win rate is claimed. `npm test` includes the specialist model/data/search checks.
