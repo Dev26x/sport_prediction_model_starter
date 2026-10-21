@@ -1,0 +1,19 @@
+{
+  "model_id": "B0-RIDGE-MARGIN",
+  "test_season": "2025-26",
+  "test_games": 1230,
+  "accuracy": 0.6308943089430894,
+  "brier": 0.22191822378275342,
+  "log_loss": 0.6349192770318305,
+  "margin_mae": 12.035974322032025,
+  "margin_rmse": 15.314099553906699,
+  "sigma_scale": 0.73724261462587,
+  "artifact": "nba/reports/backtest.json",
+  "artifact_git_blob_sha": "d9a9844d5af9e76c886d81978764ccf9f74d99b0",
+  "calibration_artifact": "nba/reports/calibration.json",
+  "calibration_git_blob_sha": "cb966b731aaebd1693d9198bad65de47e58b2dd7",
+  "games_data_sha256": "fd176f2cc212b50d778a10a62ffe3762fa91d95a7231cca2c528003ab39c2dd0",
+  "reference_repo_commit": "bc3920828f300acff48e3741b1bce411de623315",
+  "invariant_sha256": "7e2f65676f723f73225406170e5a6d1995765761722dcf5fc4150add44a637a8",
+  "scope": "Frozen historical team-only benchmark. Roster adjustments, props, totals, and betting profitability are outside this reference."
+}
