@@ -1,0 +1,10 @@
+import type {ScoreDistribution} from './winner-total-probability';
+export type SpecialistKind='nba-team-totals'|'ucl'|'win-totals';
+export type ResearchTeam={id:string;name:string};
+export type ResearchGame={id:string;start:string;home:ResearchTeam;away:ResearchTeam;completed:boolean;status:string;hp:number;ap:number;league:string};
+export type LeagueTable={league:string;name:string;teams:{id:string;name:string;played:number;gf:number;ga:number}[]};
+export type ResearchPick={id:string;fixtureId:string;matchup:string;label:string;probability:number;team?:string;side?:'over'|'under';line?:number;reason:string};
+export type ResearchCombo={id:string;fixtureId:string;picks:ResearchPick[];probability:number;suggestionEligible?:boolean};
+export type ResearchFixture={scoreDistribution?:ScoreDistribution;id:string;start:string;home:string;away:string;status:string;completed:boolean;summary:string;analysis:string[];picks:ResearchPick[];combinations:ResearchCombo[];form:{team:string;rows:{day:string;opponent:string;score:string;competition:string}[]}[]};
+export type SpecialistBoard={kind:SpecialistKind;date:string;at:string;fixtures:ResearchFixture[];messages:string[];sources:{label:string;url:string;at:string}[]};
+export type ResearchSlip={target:string;picks:ResearchPick[];probability:number|null;odds:number|null;reached:boolean};

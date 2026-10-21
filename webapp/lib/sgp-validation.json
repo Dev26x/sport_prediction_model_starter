@@ -1,5 +1,5 @@
 {
-  "modelVersion": "player-copula-v1.1",
+  "modelVersion": "player-copula-v1.5",
   "method": "Walk-forward development check on 64 evenly spaced games in the last completed season per sport. Predictors use strictly earlier dates. Conditions on the holdout box participant list; does NOT test roster selection, DNPs, injuries, offered lines, executable SGP prices or profit. The samples are too small to calibrate long-shot SGP probabilities.",
   "sports": {
     "nba": {
@@ -9,9 +9,9 @@
       "meanPredicted": 0.836376164827986,
       "observedHitRate": 0.8749248346361996,
       "brier": 0.11063457474739564,
-      "target40Sgps": 41,
-      "target40PredictedWins": 0.9054107666015625,
-      "target40ObservedWins": 1
+      "target40Sgps": 0,
+      "target40PredictedWins": 0,
+      "target40ObservedWins": 0
     },
     "nfl": {
       "season": 2025,
@@ -20,8 +20,8 @@
       "meanPredicted": 0.80885859163035,
       "observedHitRate": 0.8125,
       "brier": 0.14995647618753993,
-      "target40Sgps": 3,
-      "target40PredictedWins": 0.0691986083984375,
+      "target40Sgps": 0,
+      "target40PredictedWins": 0,
       "target40ObservedWins": 0
     }
   }

@@ -1,0 +1,589 @@
+{
+  "schema_version": "nba-project-audit-manifest/1.0",
+  "audit": {
+    "title": "NBA Prediction Project: Technical Architecture, Model Audit, Feature Engineering, and Integration Blueprint",
+    "audit_date": "2026-10-19",
+    "timezone": "America/Toronto",
+    "mode": "read-only inspection and reproducibility verification",
+    "repository_root": "/Users/hakeembraimah/Documents/sb-model/football_model_starter",
+    "primary_package": "nba",
+    "source_commit": "0e38a618dfbff932b41b8b12c3bc6ae5f4d51c59",
+    "source_branch": "main",
+    "nba_subtree_clean_at_audit": true,
+    "unrelated_dirty_webapp_work_preserved": true,
+    "secrets_inspected": false,
+    "training_logic_changed": false,
+    "expensive_training_run_started": false
+  },
+  "status_definitions": {
+    "implemented_and_verified": "Confirmed by accessible code, configuration, data, tests, or reproducible results.",
+    "implemented_but_not_validated": "Present and operational, but predictive or betting reliability is not established by an appropriate evaluation.",
+    "planned_or_proposed": "Design intent or audit recommendation that is not in the current execution path.",
+    "unknown_or_unavailable": "Cannot be established from accessible evidence.",
+    "recommended_improvement": "Audit recommendation rather than a current project capability."
+  },
+  "project_state": {
+    "target_season": "2026-27",
+    "feature_snapshot_at": "2026-10-15T04:46:13.413417+00:00",
+    "historical_seasons": [
+      "2022-23",
+      "2023-24",
+      "2024-25",
+      "2025-26"
+    ],
+    "primary_verified_capability": "Chronological team-only expected-margin and moneyline probability baseline",
+    "current_maturity": "Research prototype with a verified team baseline and unvalidated roster, market-decision, slip, and SGP extensions",
+    "secondary_project": {
+      "status": "unknown_or_unavailable",
+      "reason": "No secondary repository, archive, commit, environment, data, model artifact, predictions, or test outputs were accessible."
+    }
+  },
+  "architecture": {
+    "data_acquisition": [
+      "ESPN public JSON team/schedule/roster/depth/game-summary adapters",
+      "TheRundown current event and moneyline snapshot adapter",
+      "Web runtime ESPN news and structured injury context",
+      "Web runtime official NBA injury-report link discovery"
+    ],
+    "normalized_storage": [
+      "nba/data/games.csv",
+      "nba/data/player_games.csv",
+      "nba/data/player_seasons.csv",
+      "nba/data/teams.csv",
+      "nba/data/rosters.csv",
+      "nba/data/depthcharts.csv",
+      "nba/data/schedule.csv",
+      "nba/data/preseason.csv"
+    ],
+    "model_layers": [
+      {
+        "id": "nba-team-margin-b0",
+        "status": "implemented_and_verified",
+        "description": "Recency-weighted ridge expected-margin model with team identity, home court, and capped rest."
+      },
+      {
+        "id": "nba-probability-scale-v1",
+        "status": "implemented_and_verified",
+        "description": "Normal-CDF conversion with one sigma-scale fitted on 2024-25."
+      },
+      {
+        "id": "nba-roster-proxy-v1",
+        "status": "implemented_but_not_validated",
+        "description": "Shrunk per-36 player box translation, provisional rotation, and roster margin delta."
+      },
+      {
+        "id": "player-copula-v1.1",
+        "status": "implemented_but_not_validated",
+        "description": "Separate web player-prop marginal and dependence model for NBA SGP research."
+      }
+    ],
+    "market_layer": {
+      "status": "implemented_but_not_validated",
+      "description": "Same-book two-way moneyline normalization and no-vig comparison; web edge/EV calculations; no historical odds backtest."
+    },
+    "presentation_layer": {
+      "status": "implemented_but_not_validated",
+      "description": "Web dashboard, explanations, daily suggested slips, manual FanDuel line workflow, SGP builders, and paper wallet."
+    }
+  },
+  "entry_points": [
+    {
+      "command": "python -m nba sync",
+      "symbol": "nba.__main__.main",
+      "purpose": "Fetch and normalize public NBA data."
+    },
+    {
+      "command": "python -m nba connection",
+      "symbol": "nba.__main__.main",
+      "purpose": "Check and save non-secret TheRundown connection metadata."
+    },
+    {
+      "command": "python -m nba rundown-events",
+      "symbol": "nba.__main__.main",
+      "purpose": "Fetch a dated provider event snapshot to a private path."
+    },
+    {
+      "command": "python -m nba compare-odds",
+      "symbol": "nba.__main__.main",
+      "purpose": "Normalize current moneylines and compare model and market probabilities."
+    },
+    {
+      "command": "python -m nba build",
+      "symbol": "nba.reporting.build_reports",
+      "purpose": "Build current model state and forecast reports."
+    },
+    {
+      "command": "python -m nba backtest",
+      "symbol": "nba.backtest.run_backtest",
+      "purpose": "Run and persist the team-only chronological backtest."
+    },
+    {
+      "command": "python -m nba forecast",
+      "symbol": "nba.__main__.main",
+      "purpose": "Generate a selected team forecast."
+    },
+    {
+      "command": "npm test",
+      "working_directory": "webapp",
+      "purpose": "Run the web model and feature test suites."
+    }
+  ],
+  "datasets": [
+    {
+      "name": "historical_games",
+      "path": "nba/data/games.csv",
+      "unit": "completed regular-season game",
+      "primary_key": ["game_id"],
+      "rows": 4920,
+      "columns": 13,
+      "date_min_utc": "2022-10-18T23:30:00+00:00",
+      "date_max_utc": "2026-04-13T00:30:00+00:00",
+      "seasons": [2023, 2024, 2025, 2026],
+      "rows_per_season": 1230,
+      "sha256": "fd176f2cc212b50d778a10a62ffe3762fa91d95a7231cca2c528003ab39c2dd0",
+      "status": "implemented_and_verified"
+    },
+    {
+      "name": "player_games",
+      "path": "nba/data/player_games.csv",
+      "unit": "named player-game",
+      "primary_key": ["game_id", "player_id"],
+      "rows": 105228,
+      "columns": 25,
+      "players": 877,
+      "games": 4920,
+      "sha256": "b52f6023c6518d169e63c68f015753acf700d6d360c4cb8620d03d4fdd33c686",
+      "status": "implemented_and_verified",
+      "known_issue": "unassigned_team_points repeats a team-level gap on named player rows for seven affected boxes and must not be directly summed"
+    },
+    {
+      "name": "player_seasons",
+      "path": "nba/data/player_seasons.csv",
+      "unit": "player-team-season stint",
+      "primary_key": ["player_id", "season", "team_id"],
+      "rows": 2580,
+      "columns": 21,
+      "sha256": "6c89fb4e015ecdb4f5804efa712b9901d68f2f36a44c513825422aaf16b2a3f6",
+      "status": "implemented_and_verified"
+    },
+    {
+      "name": "teams",
+      "path": "nba/data/teams.csv",
+      "unit": "ESPN team",
+      "primary_key": ["team_id"],
+      "rows": 30,
+      "status": "implemented_and_verified"
+    },
+    {
+      "name": "current_rosters",
+      "path": "nba/data/rosters.csv",
+      "unit": "current roster player",
+      "primary_key": ["player_id"],
+      "rows": 627,
+      "columns": 14,
+      "teams": 30,
+      "with_history": 506,
+      "without_history": 121,
+      "missing_injury_status": 493,
+      "missing_depth": 104,
+      "snapshot_at": "2026-10-15T04:25:10+00:00",
+      "sha256": "4bc9e6836d5c5376d368cc813a153ef012dacf31dbe56bbdc21ad2b74de0595b",
+      "status": "implemented_but_not_validated"
+    },
+    {
+      "name": "depth_charts",
+      "path": "nba/data/depthcharts.csv",
+      "unit": "team-player-position-depth row",
+      "primary_key": ["team_id", "player_id", "position"],
+      "rows": 994,
+      "players": 525,
+      "snapshot_at": "2026-10-15T04:46:12+00:00",
+      "sha256": "676552c58729d17960fb4841aa66b2c85cbfff2c368578c416b61335db4b7837",
+      "known_issue": "104 roster players lack depth and two depth-only identities are not in current roster",
+      "status": "implemented_but_not_validated"
+    },
+    {
+      "name": "future_schedule",
+      "path": "nba/data/schedule.csv",
+      "unit": "scheduled regular-season game",
+      "primary_key": ["game_id"],
+      "rows": 1200,
+      "date_min_utc": "2026-10-20T19:00:00+00:00",
+      "date_max_utc": "2027-04-12T00:30:00+00:00",
+      "known_games_per_team": 80,
+      "sha256": "45f141356060b6c6bc3a3b0d53b3171850154b83fbc16c7fe90b4271cc3c4732",
+      "status": "implemented_and_verified"
+    },
+    {
+      "name": "preseason",
+      "path": "nba/data/preseason.csv",
+      "unit": "completed preseason game",
+      "rows": 52,
+      "model_weight": 0.0,
+      "status": "implemented_and_verified"
+    },
+    {
+      "name": "rotation_overrides",
+      "path": "nba/data/rotation_overrides.csv",
+      "unit": "manual player scenario override",
+      "rows": 0,
+      "status": "implemented_but_not_validated"
+    },
+    {
+      "name": "raw_espn_cache",
+      "path": "git-ignored local cache",
+      "unit": "response wrapper",
+      "files": 5883,
+      "bytes": 212805451,
+      "status": "unknown_or_unavailable_in_portable_git_export",
+      "notes": "Exists locally and was inventoried, but is omitted from this export because redistribution rights are unverified and it is ignored by Git."
+    },
+    {
+      "name": "kaggle_long_history",
+      "path": null,
+      "status": "planned_or_proposed",
+      "notes": "No Kaggle database or import exists in the accessible project."
+    }
+  ],
+  "targets": [
+    {
+      "id": "home_margin",
+      "definition": "home_points - away_points",
+      "unit": "game",
+      "status": "implemented_and_verified",
+      "metrics": ["MAE", "RMSE"]
+    },
+    {
+      "id": "home_win_probability",
+      "definition": "Phi(expected_home_margin / (residual_sigma * sigma_scale))",
+      "unit": "game",
+      "status": "implemented_and_verified_for_team_only",
+      "metrics": ["log_loss", "Brier", "accuracy_secondary", "reliability_bins"]
+    },
+    {
+      "id": "spread_cover_probability",
+      "definition": "normal-margin approximation relative to quoted spread",
+      "unit": "game-market-line",
+      "status": "implemented_but_not_validated"
+    },
+    {
+      "id": "game_total_probability",
+      "definition": null,
+      "status": "planned_or_proposed"
+    },
+    {
+      "id": "player_prop_probability",
+      "definition": "web-model marginal hit probability for points rebounds assists or made threes at a line",
+      "status": "implemented_but_not_fully_validated"
+    },
+    {
+      "id": "live_win_probability",
+      "definition": null,
+      "status": "planned_or_proposed"
+    }
+  ],
+  "model_configurations": [
+    {
+      "id": "nba-team-margin-b0",
+      "implementation": "nba.model.fit_team_model",
+      "status": "implemented_and_verified",
+      "parameters": {
+        "half_life_days": 365.0,
+        "team_penalty": 35.0,
+        "home_penalty": 0.01,
+        "rest_penalty": 100.0,
+        "min_history_games": 300,
+        "residual_sigma_floor": 5.0,
+        "preseason_weight": 0.0
+      },
+      "selection_provenance": "unknown_or_unavailable"
+    },
+    {
+      "id": "nba-probability-scale-v1",
+      "implementation": "nba.backtest.fit_probability_scale",
+      "status": "implemented_and_verified",
+      "parameters": {
+        "search_lower": 0.65,
+        "search_upper": 1.75,
+        "selected_sigma_scale": 0.73724261462587,
+        "objective": "calibration-season log loss"
+      }
+    },
+    {
+      "id": "nba-roster-proxy-v1",
+      "implementation": "nba.players.roster_analysis",
+      "status": "implemented_but_not_validated",
+      "parameters": {
+        "player_shrinkage_minutes": 750.0,
+        "roster_blend": 0.5,
+        "max_roster_adjustment": 8.0,
+        "team_rotation_minutes": 240.0,
+        "player_minutes_cap": 40.0,
+        "provisional_rotation_players": 11,
+        "season_weights_oldest_to_newest": [0.125, 0.25, 0.5, 1.0],
+        "depth_minute_priors": [30.0, 18.0, 8.0, 3.0],
+        "default_availability": 1.0
+      }
+    }
+  ],
+  "feature_set_versions": [
+    {
+      "id": "nba-team-features-b0",
+      "status": "implemented_and_verified",
+      "features": [
+        "team identity contrast",
+        "non-neutral home indicator",
+        "capped rest-day difference"
+      ],
+      "sample_weight": "2^(-age_days/365)"
+    },
+    {
+      "id": "nba-player-box-v1",
+      "status": "implemented_but_not_validated",
+      "features": [
+        "points",
+        "missed_fg",
+        "missed_ft",
+        "oreb",
+        "dreb",
+        "ast",
+        "stl",
+        "blk",
+        "tov",
+        "fg3m"
+      ]
+    },
+    {
+      "id": "nba-current-roster-v1",
+      "status": "implemented_but_not_validated",
+      "features": [
+        "historical MPG",
+        "depth role prior",
+        "availability multiplier",
+        "projected minutes",
+        "player impact translation",
+        "current-minus-previous roster contribution"
+      ]
+    },
+    {
+      "id": "nba-expanded-features-vNext",
+      "status": "planned_or_proposed",
+      "feature_groups": [
+        "pace and Four Factors",
+        "opponent-adjusted offense defense and net rating",
+        "travel schedule density and time zones",
+        "timestamped expected minutes injuries and lineups",
+        "player age role and continuity",
+        "style and matchup",
+        "season phase",
+        "historical market price and movement"
+      ]
+    }
+  ],
+  "backtest": {
+    "implementation": "nba.backtest.run_backtest",
+    "status": "implemented_and_verified",
+    "split": {
+      "initial_history": "2022-23",
+      "development": "2023-24",
+      "calibration": "2024-25",
+      "test": "2025-26"
+    },
+    "test_games": 1230,
+    "metrics": {
+      "team_raw": {
+        "accuracy": 0.6308943089430894,
+        "brier": 0.2229768824497897,
+        "log_loss": 0.6369486712800639,
+        "margin_mae": 12.035974322032025,
+        "margin_rmse": 15.314099553906699
+      },
+      "team_calibrated": {
+        "accuracy": 0.6308943089430894,
+        "brier": 0.22191822378275342,
+        "log_loss": 0.6349192770318305,
+        "margin_mae": 12.035974322032025,
+        "margin_rmse": 15.314099553906699
+      },
+      "home_rate_baseline": {
+        "accuracy": 0.5544715447154471,
+        "brier": 0.24708516627987379,
+        "log_loss": 0.6873070059310368
+      }
+    },
+    "calibrated_minus_baseline_log_loss": {
+      "mean_difference": -0.05238772889920625,
+      "interval_95": [-0.07180300593261175, -0.032920333036342654],
+      "bootstrap_unit": "match_date",
+      "bootstrap_iterations": 2000,
+      "seed": 42
+    },
+    "calibrated_minus_raw_log_loss": {
+      "mean_difference": -0.0020293942482334008,
+      "interval_95": [-0.007489676573248229, 0.00359171379170781]
+    },
+    "scope_limit": "Current roster adjustments and bookmaker data are excluded."
+  },
+  "api_dependencies": [
+    {
+      "provider": "ESPN public JSON",
+      "status": "implemented_and_verified_against_existing_artifacts",
+      "authentication": "none",
+      "license_status": "unknown_or_unavailable",
+      "notes": "Undocumented endpoints; production and commercial-use rights unresolved."
+    },
+    {
+      "provider": "TheRundown Product V2",
+      "status": "implemented_current_moneyline_only",
+      "authentication": "X-TheRundown-Key from ignored environment",
+      "license_status": "plan_dependent",
+      "notes": "Current entitlement must be rechecked; no secret is in this manifest."
+    },
+    {
+      "provider": "NBA official injury report",
+      "status": "partially_implemented_link_only",
+      "authentication": "none",
+      "notes": "PDF content is not parsed into model availability."
+    },
+    {
+      "provider": "Kaggle Wyatt Walsh NBA Database",
+      "status": "planned_or_proposed",
+      "notes": "No file or import exists."
+    },
+    {
+      "provider": "NBA Stats",
+      "status": "planned_or_proposed_with_licensing_blocker",
+      "notes": "Reviewed terms restrict NBA Statistics use in gambling/commercial contexts without consent."
+    },
+    {
+      "provider": "The Odds API",
+      "status": "planned_or_proposed"
+    },
+    {
+      "provider": "SportsDataIO",
+      "status": "planned_or_proposed"
+    },
+    {
+      "provider": "EdgeFinder",
+      "status": "planned_or_proposed"
+    },
+    {
+      "provider": "RotoWire/OpticOdds",
+      "status": "unknown_or_unavailable_not_integrated"
+    },
+    {
+      "provider": "FanDuel Ontario",
+      "status": "manual_quote_input_only"
+    }
+  ],
+  "runtime": {
+    "python": "3.15.0",
+    "python_packages": {
+      "pandas": "3.0.6",
+      "numpy": "2.5.4",
+      "scipy": "1.18.1",
+      "python-dateutil": "2.9.0.post0",
+      "six": "1.17.0"
+    },
+    "python_lock_present": false,
+    "system_dependency": "curl",
+    "web_node_requirement": ">=22.13",
+    "web_direct_versions": {
+      "next": "16.3.4",
+      "react": "19.2.6",
+      "typescript": "5.9.3",
+      "vinext": "1.0.0-beta.5",
+      "vite": "8.0.13",
+      "wrangler": "4.92.0",
+      "drizzle-orm": "0.45.2",
+      "zod": "3.25.76"
+    }
+  },
+  "verification": {
+    "nba_python_tests": {
+      "passed": 24,
+      "failed": 0
+    },
+    "backtest_reproduction": "exact_match_to_saved_json",
+    "report_reproduction": {
+      "schedule_forecasts": 1200,
+      "team_ratings": 30,
+      "player_projections": 627,
+      "maximum_float_difference": 3.6e-15
+    },
+    "web_tests": {
+      "passed_checks": 221,
+      "failed_checks": 0,
+      "scope_note": "Includes other sports and product behavior; only relevant NBA subsets are predictive evidence."
+    }
+  },
+  "known_limitations": [
+    "No rigorous recorded model-selection comparison.",
+    "No formal leakage-safe feature-selection experiment.",
+    "Roster and player adjustment is not historically validated.",
+    "No historical odds baseline, ROI, CLV, P&L, or drawdown.",
+    "Individual provider price age can predate the feature snapshot even when the response fetch is later.",
+    "Suggested slips can contain probability-led research legs without strict fresh positive-EV eligibility.",
+    "SGP validation conditions on known participants and lacks offered-line/price/profit evaluation.",
+    "Only four historical seasons are in the actual model data.",
+    "No exact Python environment lock or CI.",
+    "Raw source cache and private market snapshots are not portable in Git.",
+    "Data licensing for public or commercial betting use is unresolved.",
+    "Secondary project is unavailable."
+  ],
+  "recommended_integration_order": [
+    "Freeze and version the verified baseline.",
+    "Pin dependencies and add CI/rebuild verification.",
+    "Create canonical identity and immutable as-of observations.",
+    "Resolve source rights and import a versioned long-history dataset.",
+    "Add Elo regularized win and market-implied baselines.",
+    "Run fold-local feature-group ablations.",
+    "Validate roster availability and expected minutes historically.",
+    "Archive timestamped odds and run decision evaluation.",
+    "Intake the secondary project one component at a time.",
+    "Run a prospective shadow period before expanding claims."
+  ],
+  "export_files": [
+    {
+      "path": "NBA_Prediction_Project_Technical_Audit.docx",
+      "purpose": "Formatted main technical audit"
+    },
+    {
+      "path": "NBA_Prediction_Project_Technical_Audit.md",
+      "purpose": "Markdown equivalent of the main audit"
+    },
+    {
+      "path": "NBA_Feature_Catalog.csv",
+      "purpose": "Machine-readable feature inventory"
+    },
+    {
+      "path": "NBA_Model_Experiment_Register.csv",
+      "purpose": "Actual and planned model/experiment register"
+    },
+    {
+      "path": "NBA_API_Data_Source_Register.csv",
+      "purpose": "Actual and proposed API/data-source register"
+    },
+    {
+      "path": "NBA_Project_Manifest.json",
+      "purpose": "Machine-readable project manifest"
+    },
+    {
+      "path": "NBA_Project_Integration_Blueprint.md",
+      "purpose": "Future integration contracts and phase gates"
+    }
+  ],
+  "external_references": [
+    "https://www.kaggle.com/wyattowalsh/basketball",
+    "https://www.nba.com/termsofuse",
+    "https://official.nba.com/nba-injury-report-2025-26-season",
+    "https://therundown.io/docs/quickstart",
+    "https://therundown.io/api",
+    "https://the-odds-api.com/liveapi/guides/v4/",
+    "https://the-odds-api.com/historical-odds-data/",
+    "https://sportsdata.io/developers/api-documentation/nba",
+    "https://sportsdata.io/developers/coverages/nba",
+    "https://edgefinder.io/developers",
+    "https://edgefinder.io/help"
+  ]
+}

@@ -49,3 +49,49 @@
 @media(max-width:760px){.wnba-review{padding:19px;margin:23px 0 35px}.wnba-review>header{display:block;margin-bottom:20px}.wnba-review h2{font-size:24px;letter-spacing:-.7px}.wnba-review header p{font-size:10px}.wnba-review header>a{margin-top:12px;font-size:10px}.wnba-review-scores{grid-template-columns:1fr 1fr}.wnba-review-scores>div{padding:16px 13px}.wnba-review-scores>div:last-child{grid-column:span 2;border-left:0;border-top:1px solid #e2e8d9}.wnba-review-scores strong{font-size:29px}.wnba-review-scores small{font-size:9px}.wnba-review-scores span{font-size:7px;letter-spacing:.5px}.wnba-review-context{font-size:10px;padding-bottom:20px}.wnba-review-misses>div{grid-template-columns:1fr}.wnba-review-misses article{padding:17px}.wnba-review-misses h4{font-size:14px}.wnba-review-misses p{font-size:11px}.wnba-review-findings{grid-template-columns:1fr;gap:20px}.wnba-review-findings h3{font-size:12px}.wnba-review-findings p{font-size:10px}.wnba-review>footer{grid-template-columns:1fr;gap:15px}.wnba-review footer nav a{font-size:10px}.wnba-review th,.wnba-review td{padding:11px 13px}.wnba-review-all summary{font-size:10px}}
 .wnba-jump-links{display:flex;gap:18px;margin-left:auto;margin-right:12px;font-size:10px;color:#7b9566}.wnba-jump-links a{padding:8px 0}.wnba-review{scroll-margin-top:22px}
 @media(max-width:760px){.wnba-jump-links{order:3;width:100%;justify-content:space-between;margin:0;border-top:1px solid #e5ebdc;padding-top:10px;font-size:10px}}
+.fd-pricing-switch,.fd-profile-tabs{display:flex;gap:8px;padding:7px;border:1px solid #dfe3d5;border-radius:13px;background:#f5f6ef;margin:22px 0}
+.fd-pricing-switch button,.fd-profile-tabs button{flex:1;padding:12px 16px;border:0;border-radius:9px;background:transparent;color:#64705d;font-size:12px;cursor:pointer}
+.fd-pricing-switch button.selected,.fd-profile-tabs button.selected{background:#244d3d;color:#fff;box-shadow:0 2px 6px #18372912}
+.fd-builder{background:#fff;border:1px solid #dce1d2;border-radius:20px;padding:30px;margin:20px 0;color:#4d6048;font-size:13px;line-height:1.6;min-width:0}
+.fd-builder>header{display:flex;align-items:flex-start;justify-content:space-between;gap:25px;margin-bottom:23px}
+.fd-builder>header h2{font-size:34px;line-height:1.12;letter-spacing:-1px;font-weight:500;margin:12px 0}
+.fd-builder>header p{max-width:680px;color:#76806e;font-size:13px}
+.fd-builder>header>a{display:flex;gap:6px;align-items:center;white-space:nowrap;font-size:11px;color:#4d6048;text-decoration:none;margin-top:7px}
+.fd-source-note{display:flex;gap:12px;padding:16px 18px;background:#f8f5e9;border:1px solid #e9e2c8;border-radius:12px;margin:18px 0 25px;color:#716544;font-size:12px}
+.fd-source-note svg{flex-shrink:0;margin-top:3px}.fd-source-note p{margin:0}.fd-source-note b{font-weight:600}
+.fd-entry-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px;align-items:end}
+.fd-builder label{display:flex;flex-direction:column;gap:6px;font-size:11px;font-weight:500;color:#64705d;min-width:0}
+.fd-builder input,.fd-builder select{width:100%;height:42px;border:1px solid #dce1d2;border-radius:8px;background:#fff;padding:9px 11px;color:#344c35;font:inherit;font-size:13px;min-width:0}
+.fd-builder input:focus,.fd-builder select:focus{outline:2px solid #819d6d;outline-offset:2px}
+.fd-builder button:disabled{opacity:.5;cursor:not-allowed}.fd-entry-grid>.primary-button{height:42px;justify-content:center;font-size:11px}
+.fd-copied-lines{margin-top:23px;border:1px solid #e1e5d9;border-radius:11px;overflow:hidden}
+.fd-copied-lines>header{padding:13px 15px;background:#f6f7f1;display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:12px}
+.fd-copied-lines>div{display:grid;grid-template-columns:minmax(0,1fr) 70px 26px;gap:10px;align-items:center;padding:11px 15px;border-top:1px solid #e9ebe3;font-size:12px}
+.fd-copied-lines>div>span{overflow-wrap:anywhere}.fd-copied-lines>div>span small{display:block;font-size:10px;color:#909987;margin-top:3px}.fd-copied-lines>div>b{text-align:right;font-weight:500}.fd-copied-lines>div>button{border:0;background:none;padding:5px;color:#858d7a;cursor:pointer}
+.fd-copied-lines>p{padding:0 15px;font-size:11px;color:#868d7c}.fd-analyze{margin-top:18px}.fd-warning{color:#9a5c39!important;background:#fff7ef;border-radius:8px;padding:10px 13px;font-size:12px}
+.fd-method-short{font-size:11px;color:#818b75;max-width:900px}.fd-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid #e0e5d6;border-radius:13px;overflow:hidden;margin:23px 0}
+.fd-summary>div{display:flex;flex-direction:column;gap:7px;padding:20px;background:#f8f9f3}.fd-summary>div+div{border-left:1px solid #e0e5d6}.fd-summary>div:last-child{background:#edf4e8}.fd-summary span{font-size:9px;letter-spacing:.08em;color:#87927b}.fd-summary strong{font-size:32px;font-weight:500;letter-spacing:-1px;line-height:1.1}.fd-summary small{font-size:10px;color:#8a937f}
+.fd-result-lines{border:1px solid #dfe4d5;border-radius:11px;overflow:hidden}.fd-result-lines details+details{border-top:1px solid #e6e9dd}.fd-result-lines summary{display:flex;justify-content:space-between;gap:15px;padding:15px 17px;cursor:pointer;list-style:none;font-size:13px}.fd-result-lines summary::-webkit-details-marker{display:none}.fd-result-lines summary i{display:inline-flex;width:22px;height:22px;border-radius:50%;background:#f0f3e8;align-items:center;justify-content:center;margin-right:9px;font-size:10px;font-style:normal;color:#829273}.fd-result-lines summary small{display:block;color:#909986;font-size:10px;font-weight:400;margin-top:4px}.fd-result-lines summary>b{text-align:right;flex-shrink:0;font-weight:500}.fd-result-lines details>p{margin:0;padding:8px 17px 15px;font-size:12px;color:#7a8770}
+.fd-combined-quote{padding:20px;border:1px solid #dde4d3;background:#fafbf7;border-radius:12px;margin:23px 0}.fd-combined-quote h3{font-size:17px;font-weight:500;margin:0 0 8px}.fd-combined-quote p{font-size:12px;color:#859078}.fd-combined-quote>div{display:grid;grid-template-columns:150px minmax(0,1fr) auto;gap:12px;align-items:end}.fd-combined-quote .primary-button{height:42px;font-size:11px}
+.fd-return{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;align-items:end;margin:20px 0}.fd-return>div{display:flex;flex-direction:column;gap:5px}.fd-return>div>span{font-size:11px;color:#87927b}.fd-return b{font-size:24px;font-weight:500}.fd-empty{padding:24px;background:#f7f8f1;border-radius:12px;color:#849077;font-size:12px}.wnba-profile-switch{margin:14px 0 20px}
+@media(max-width:760px){.fd-builder{padding:19px 16px}.fd-builder>header{display:block}.fd-builder>header h2{font-size:29px}.fd-builder>header>a{margin-top:14px}.fd-pricing-switch,.fd-profile-tabs{gap:4px}.fd-pricing-switch button,.fd-profile-tabs button{font-size:10px;padding:11px 8px}.fd-entry-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.fd-entry-grid>label:nth-child(-n+2){grid-column:1/-1}.fd-source-note{padding:13px;font-size:11px}.fd-summary{grid-template-columns:1fr 1fr}.fd-summary>div{padding:16px}.fd-summary>div:last-child{grid-column:1/-1;border-left:0;border-top:1px solid #e0e5d6}.fd-summary strong{font-size:29px}.fd-combined-quote{padding:15px}.fd-combined-quote>div{grid-template-columns:1fr 1fr}.fd-combined-quote .primary-button{grid-column:1/-1;justify-content:center}.fd-return{grid-template-columns:1fr 1fr;gap:15px}.fd-return>label{grid-column:1/-1}.fd-return b{font-size:21px}.fd-result-lines summary{padding:13px 12px;font-size:12px}.fd-result-lines summary small{font-size:9px}.fd-copied-lines>div{padding:10px;grid-template-columns:minmax(0,1fr) 55px 24px;gap:6px}}
+
+/* Simple combined slips keep the research on its own page. */
+.combined-slip-pick{display:flex;align-items:center;gap:14px;padding:15px 0;border-bottom:1px solid var(--border,rgba(128,128,128,.15))}
+.combined-slip-pick:last-child{border-bottom:0}
+.combined-slip-pick>span{font-size:12px;opacity:.5;min-width:22px}
+.combined-slip-pick>b{font-size:15px;font-weight:550;line-height:1.5}
+.daily-sgp-target-bar .sgp-targets{display:flex;flex-wrap:wrap;gap:8px}
+
+/* A combined parlay is one continuous ticket, not separate game boxes. */
+.combined-ticket{border:1px solid var(--border,rgba(128,128,128,.2));border-radius:16px;padding:24px;margin:20px 0;background:rgba(255,255,255,.015)}
+.combined-ticket-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-bottom:18px;border-bottom:1px solid var(--border,rgba(128,128,128,.15))}
+.combined-ticket-heading h2{margin:8px 0 0;font-size:22px}
+.combined-ticket-heading>a{font-size:13px;white-space:nowrap}
+.combined-ticket-picks{list-style:none;padding:0;margin:0}
+.combined-ticket-picks>li{display:flex;align-items:center;gap:16px;padding:17px 0;border-bottom:1px solid var(--border,rgba(128,128,128,.12))}
+.combined-ticket-picks>li:last-child{border-bottom:0}
+.combined-ticket-number{font-size:12px;opacity:.45;min-width:24px}
+.combined-ticket-picks b{display:block;font-size:15px;line-height:1.5;font-weight:550}
+.combined-ticket-picks small{display:block;font-size:12px;opacity:.6;margin-top:4px}
+@media(max-width:600px){.combined-ticket{padding:17px}.combined-ticket-heading h2{font-size:19px}}

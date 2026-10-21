@@ -1,5 +1,6 @@
 import { cached,fresh,putCache,database } from './storage';
 import { localDay } from './models';
+import { cappedSgpTarget } from './sgp-target-search';
 import { compactWnbaSlip,wnbaAvailability,WNBA_MODEL_VERSION,WNBA_SLIP_POLICY } from './wnba-model';
 import { WNBA_CSV,parseWnbaPlayers,parseWnbaFinals,parseWnbaRoster,mergeWnbaData } from './wnba-data';
 import { parseWnbaBox,mergeWnbaFinalBox,reviewedWnbaCandidates,reviewWnbaGame,WNBA_ISSUED_INSERT } from './wnba-review';
@@ -54,6 +55,7 @@ export async function wnbaBoard(fixtureId=''):Promise<WnbaBoard>{
  const candidates=addSgpLineupEvidence(evaluated.candidates,rosters,lineup).map(p=>{const logs=data.players[p.playerId].logs.filter(r=>data.games[r[0]][1]<asOf&&data.games[r[0]][2]===2026&&data.phases[data.games[r[0]][0]]===3);return {...p,playoffGames:logs.length,playoffMean:logs.length?logs.reduce((s,r)=>s+Number(r[p.metric+3]),0)/logs.length:null};});
  let review:WnbaBoard['review']=null;
  if(box){const archived=box.fixtureId==='401918305'?(await import('./wnba-game1-pregame.json')).default as unknown as WnbaIssued:(await cached<WnbaIssued>(`wnba:issued:v2:${box.fixtureId}`))?.value||null,next=fixture&&!fixture.completed?fixture:fixtures.find(f=>!f.completed&&Date.parse(f.start)>now),nextCandidates=next&&fresh(rosterAt,24*60)?reviewedWnbaCandidates(data,next,today,rosters).candidates:[];review=reviewWnbaGame(box,archived,nextCandidates,data,today);}
- const board:WnbaBoard={fixtures,fixture:fixture||null,asOf,...evaluated,candidates,suggestion,news:news?.value||base.news,historyAt,rosterAt,lastResult:earlier.map(g=>g[1]).sort().at(-1)||null,playoffGames:earlier.filter(g=>data.phases[g[0]]===3).length,regularGames:earlier.filter(g=>data.phases[g[0]]===2).length,messages:checked?.value||[],needsRefresh:!fresh(checked?.at||base.snapshot,30),unavailable,generatedAt:new Date().toISOString(),publicCheckedAt:checked?.at||null,lineup,review,policy:WNBA_SLIP_POLICY};
+ const fifty=unavailable?{legs:[],joint:null,targetReached:false,reason:unavailable}:cappedSgpTarget(data,evaluated.candidates,asOf,'wnba',50);
+ const board:WnbaBoard={fifty,fixtures,fixture:fixture||null,asOf,...evaluated,candidates,suggestion,news:news?.value||base.news,historyAt,rosterAt,lastResult:earlier.map(g=>g[1]).sort().at(-1)||null,playoffGames:earlier.filter(g=>data.phases[g[0]]===3).length,regularGames:earlier.filter(g=>data.phases[g[0]]===2).length,messages:checked?.value||[],needsRefresh:!fresh(checked?.at||base.snapshot,30),unavailable,generatedAt:new Date().toISOString(),publicCheckedAt:checked?.at||null,lineup,review,policy:WNBA_SLIP_POLICY};
  if(fixture)await recordIssued(fixture,board);return board;
 }

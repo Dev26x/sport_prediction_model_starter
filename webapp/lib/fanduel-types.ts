@@ -1,0 +1,10 @@
+import type { SgpCandidate,SgpDataset,SgpModelSport,SgpQuotedLine,SgpRosterPlayer } from './sgp-types';
+import type { Fixture } from './types';
+export type FanDuelFixture=Omit<Fixture,'sport'>&{sport:SgpModelSport};
+export type FanDuelContext={fixture:FanDuelFixture;data:SgpDataset;before:string;rosters:Record<string,SgpRosterPlayer[]>;rosterAt:string;historyAt:string;unavailable:string|null};
+export type FanDuelOptions={fixture:FanDuelFixture;players:{id:string;name:string;team:string;injury:string}[];metrics:string[];rosterAt:string;unavailable:string|null};
+export type FanDuelInputLine=SgpQuotedLine&{sport:SgpModelSport};
+export type FanDuelGroup={fixture:FanDuelFixture;data:SgpDataset;before:string;candidates:SgpCandidate[]};
+export type FanDuelScope='single'|'combined';
+export type FanDuelSuggestion={id:'compact'|'50';legs:(SgpCandidate&{sport:SgpModelSport;fixtureId:string;matchup:string})[];groups:{fixtureId:string;sport:SgpModelSport;matchup:string;probability:number;fairOdds:number|null;legs:number}[];probability:number|null;fairOdds:number|null;modelTargetReached:boolean;selectionKey:string;reason:string;measuredPairs:number;totalPairs:number};
+export type FanDuelAnalysis={region:'CA-ON';source:'manual';scope:FanDuelScope;suggestions:FanDuelSuggestion[];qualified:{id:string;label:string;probability:number;sport:SgpModelSport}[];rejected:string[];generatedAt:string;rosterAt:string;historyAt:string;inputKey:string};

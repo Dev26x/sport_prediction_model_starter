@@ -30,15 +30,15 @@ export function wnbaRoleSignal(data:WnbaData,id:string,team:string,before:string
  const logs=priorLogs(data,id,before,'wnba').filter(r=>r[1]===team&&data.games[r[0]][2]===Number(before.slice(0,4))),prior=logs.slice(1,11),mean=prior.length?prior.reduce((s,r)=>s+r[2],0)/prior.length:0,latest=logs[0]?.[2]||0,ratio=mean?latest/mean:null;
  return {latestMinutes:latest,priorMinutes:mean,ratio,uncertain:prior.length>=5&&mean>=18&&ratio!==null&&ratio<.6};
 }
-export function reviewedWnbaCandidates(data:WnbaData,fixture:WnbaFixture,before:string,rosters:Record<string,SgpRosterPlayer[]>){
- const evaluated=playerCandidates(data,fixture,before,rosters),held=new Map<string,string>();
+export function reviewedWnbaCandidates(data:WnbaData,fixture:WnbaFixture,before:string,rosters:Record<string,SgpRosterPlayer[]>,quotes?:import('./sgp-types').SgpQuotedLine[]){
+ const evaluated=playerCandidates(data,fixture,before,rosters,Date.now(),quotes),held=new Map<string,string>();
  for(const team of [fixture.home.id,fixture.away.id])for(const p of rosters[team]||[]){const role=wnbaRoleSignal(data,p.id,team,before);if(role.uncertain)held.set(p.id,`Latest current-team appearance: ${role.latestMinutes} minutes versus ${role.priorMinutes.toFixed(1)} over the preceding ten appearances. Below 60% of that baseline; rotation is uncertain. Held out pending new playing-time or lineup evidence, regardless of whether the last prop hit.`);}
  return {candidates:evaluated.candidates.filter(p=>!held.has(p.playerId)),excluded:[...evaluated.excluded,...[...held].map(([id,reason])=>({player:data.players[id].name,reason}))]};
 }
 export function settleWnbaResearch(leg:SgpCandidate,box:WnbaBox){
  if(leg.id.split(':')[0]!==box.fixtureId)return {state:'unresolved' as const,actual:null,minutes:null};
  const p=box.players[leg.playerId];if(!p||p.team!==leg.team)return {state:'unresolved' as const,actual:null,minutes:null};
- if(p.didNotPlay)return {state:'void' as const,actual:null,minutes:0};const actual=p.stats[leg.metric];if(!Number.isFinite(actual))return {state:'unresolved' as const,actual:null,minutes:p.minutes};return {state:actual>=leg.threshold?'hit' as const:'miss' as const,actual,minutes:p.minutes};
+ if(p.didNotPlay)return {state:'void' as const,actual:null,minutes:0};const actual=p.stats[leg.metric];if(!Number.isFinite(actual))return {state:'unresolved' as const,actual:null,minutes:p.minutes};return {state:(leg.side==='under'?actual<leg.threshold:leg.side==='over'?actual>leg.threshold:actual>=leg.threshold)?'hit' as const:'miss' as const,actual,minutes:p.minutes};
 }
 export function reviewWnbaGame(box:WnbaBox,forecast:WnbaIssued|null,next:SgpCandidate[],data:WnbaData,before:string):WnbaGameReview{
  const legs=(forecast?.suggestion.legs||[]).map(leg=>{const result=settleWnbaResearch(leg,box),updated=next.find(p=>p.playerId===leg.playerId&&p.metric===leg.metric&&p.threshold===leg.threshold),role=wnbaRoleSignal(data,leg.playerId,leg.team,before),p=box.players[leg.playerId];

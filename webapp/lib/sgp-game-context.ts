@@ -24,7 +24,7 @@ export function parseSgpGameContext(payload:any,fixture:SgpModelFixture,espnIds:
 }
 export function applySgpGameContext(rosters:Record<string,SgpRosterPlayer[]>,context:SgpGameContext|null|undefined){
  if(!context)return rosters;
- return Object.fromEntries(Object.entries(rosters).map(([team,players])=>[team,players.map(p=>{const flags=context.injuries.filter(i=>i.team===team&&i.playerId===(p.espnId||p.id)&&!/^active$|^available$|^healthy$/i.test(i.status));return flags.length?{...p,injury:[p.injury,...flags.map(i=>i.status)].filter(Boolean).join(', ')}:p;})]));
+ return Object.fromEntries(Object.entries(rosters).map(([team,players])=>[team,players.map(p=>{const flags=context.injuries.filter(i=>i.team===team&&i.playerId===(p.espnId||p.id)&&!/^active$|^available$|^healthy$/i.test(i.status));return flags.length?{...p,injury:[...new Set([...p.injury.split(',').map(s=>s.trim()),...flags.map(i=>i.status)].filter(Boolean))].join(', ')}:p;})]));
 }
 export function addSgpLineupEvidence<T extends SgpCandidate>(candidates:T[],rosters:Record<string,SgpRosterPlayer[]>,context:SgpGameContext|null|undefined):T[]{
  if(!context?.lineupConfirmed)return candidates;

@@ -76,15 +76,15 @@ function parseCsv(text:string):Record<string,string>[] {
   if(value||row.length){row.push(value.replace(/\r$/,''));rows.push(row);}const headers=rows.shift()||[];
   return rows.filter(r=>r.length===headers.length).map(r=>Object.fromEntries(headers.map((h,i)=>[h,r[i]])));
 }
-async function updateFixtures(date:string,sport:Sport) {
-  const old=await cached<Fixture[]>(`fixtures:${sport}:${date}`);if(fresh(old?.at,15))return 'Fixture cache is current.';
+async function updateFixtures(date:string,sport:Sport,force=false) {
+  const old=await cached<Fixture[]>(`fixtures:${sport}:${date}`);if(!force&&fresh(old?.at,15))return 'Fixture cache is current.';
   const {data}=await fetchJson(`${ESPN}${PATH[sport]}/scoreboard?dates=${date.replaceAll('-','')}&limit=100`);
   const fixtures=parseEvents(data,sport).filter(f=>f.day===date);await putCache(`fixtures:${sport}:${date}`,fixtures);return `${fixtures.length} fixtures checked.`;
 }
-export async function refreshSources(date:string,sports:Sport[]) {
+export async function refreshSources(date:string,sports:Sport[],forceFixtures=false) {
   const messages:string[]=[];
   for(const sport of sports) {
-    try {messages.push(`${sport.toUpperCase()}: ${await updateFixtures(date,sport)}`);}catch(e){messages.push(`${sport.toUpperCase()} fixtures: ${(e as Error).message}`);}
+    try {messages.push(`${sport.toUpperCase()}: ${await updateFixtures(date,sport,forceFixtures)}`);}catch(e){messages.push(`${sport.toUpperCase()} fixtures: ${(e as Error).message}`);}
     if(sport==='nba') {
       const old=await cached<NbaGame[]>('nba:current');
       if(fresh(old?.at,60)){messages.push('NBA results were checked within the last hour.');continue;}

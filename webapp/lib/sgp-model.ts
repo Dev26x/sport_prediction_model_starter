@@ -1,8 +1,9 @@
 import { normalCdf } from './models';
-import type { SgpCandidate,SgpDataset,SgpJoint,SgpSuggestion,PlayerLog,SgpRosterPlayer,SgpModelSport,SgpModelFixture,SgpPrefixSet,DailySgpSuggestion,SgpPool } from './sgp-types';
+import type { SgpCandidate,SgpDataset,SgpJoint,SgpSuggestion,PlayerLog,SgpRosterPlayer,SgpModelSport,SgpModelFixture,SgpPrefixSet,DailySgpSuggestion,DailySgpProfile,SgpPool,SgpQuotedLine } from './sgp-types';
 import { inSgpPool } from './sgp-pool';
 
-export const SGP_MODEL_VERSION='player-copula-v1.1';
+export const SGP_MODEL_VERSION='player-copula-v1.5';
+export const SGP_GAME_MAX_LEGS=10;
 const clamp=(n:number,lo:number,hi:number)=>Math.max(lo,Math.min(hi,n));
 const average=(a:number[])=>a.length?a.reduce((s,x)=>s+x,0)/a.length:0;
 export function nameKey(s:string){return s.toLowerCase().replace(/[^a-z0-9]/g,'');}
@@ -22,7 +23,8 @@ export function opponentAdjustment(data:SgpDataset,opponent:string,metric:number
  for(let i=0;i<rows.length;i++){const r=rows[i],g=data.games[r.game];if((g[3]===r.team?g[4]:g[3])===opponent){sum+=r.sum*w[i];weight+=w[i];count++;}}
  return {factor:league>0?clamp((sum+20*league)/(weight+20)/league,.85,1.15):1,games:count};
 }
-export function playerCandidates(data:SgpDataset,fixture:SgpModelFixture,before:string,rosters:Record<string,SgpRosterPlayer[]>,now=Date.now()){
+export function quotedPropProbability(values:number[],w:number[],effective:number,line:number,side:'over'|'under'){return (weighted(values.map(v=>(side==='over'?Math.round(v)>line:Math.round(v)<line)?1:0),w)*effective+1)/(effective+2);}
+export function playerCandidates(data:SgpDataset,fixture:SgpModelFixture,before:string,rosters:Record<string,SgpRosterPlayer[]>,now=Date.now(),quotedLines?:SgpQuotedLine[]){
  const sport=fixture.sport,candidates:SgpCandidate[]=[],excluded:{player:string;reason:string}[]=[],opponents=new Map<string,number>();
  for(const team of [fixture.away.id,fixture.home.id]){
   const opponent=team===fixture.home.id?fixture.away.id:fixture.home.id;
@@ -59,12 +61,14 @@ export function playerCandidates(data:SgpDataset,fixture:SgpModelFixture,before:
     // Threshold policy is fixed BEFORE seeing either target: lower quartile,
     // rounded down to a normal milestone. No target-driven line adjustment.
     const step=sport!=='nfl'?[5,2,2,1][metric]:[25,10,10,1,1][metric];
-    const threshold=Math.floor(quantile(scaled,w,.25)/step)*step;
-    if(threshold<step)continue;
+    const offered=quotedLines?.filter(q=>q.fixtureId===fixture.id&&q.playerId===member.id&&q.metric===metric);
+    for(const quote of offered??[null]){
+    const threshold=quote?quote.line:Math.floor(quantile(scaled,w,.25)/step)*step;
+    if(!quote&&threshold<step)continue;
     const successes=scaled.map(v=>v>=threshold?1:0),rate=weighted(successes,w);
     // Two effective pseudo-observations centred on 50%, preventing 100% claims.
-    const probability=(rate*effective+1)/(effective+2);
-    if(probability<.68||probability>.95)continue;
+    const probability=quote?quotedPropProbability(scaled,w,effective,threshold,quote.side):(rate*effective+1)/(effective+2);
+    if(probability<(quote ? .55 : .68)||probability>.95)continue;
     // NFL weekly files contain offensive involvement, not guaranteed active DNPs.
     // Reject a disappearing role rather than dropping the zero/low games.
     if(sport==='nfl'&&average(logs.slice(0,3).map(r=>Number(r[metric+3])))<mean*.45)continue;
@@ -73,7 +77,8 @@ export function playerCandidates(data:SgpDataset,fixture:SgpModelFixture,before:
     if(!current.length)warnings.push('No current-season regular-season boxes yet. Preseason is excluded.');
     if(logs[0][1]!==team)warnings.push('New team: prior-team production is transferred provisionally; the new role is unvalidated.');
     if(sport==='nfl')warnings.push('Weekly offensive boxes omit some active games with no recorded involvement; participation risk can be understated.');
-    candidates.push({id:`${fixture.id}:${member.id}:${metric}`,playerId:member.id,player:member.name,team,opponent,metric,stat:data.metrics[metric],threshold,label:`${member.name} ${threshold}+ ${data.metrics[metric]}`,probability,mean:mean*factor*role,lastFive,currentMean:current.length?average(current.map(r=>Number(r[metric+3]))):null,currentGames:current.length,historyGames:logs.length,effectiveGames:effective,h2hGames:h2h.length,h2hMean:h2h.length?average(h2h.map(r=>Number(r[metric+3]))):null,opponentFactor:factor,roleFactor:role,projectedMinutes:minutes,reason:`${member.name} averaged ${mean.toFixed(1)} ${data.metrics[metric]} across ${logs.length} earlier ${sport==='wnba'?'regular-season/playoff':'regular-season'} games (recent games weighted more). Last five: ${lastFive.join(', ')}. Opponent team allowance changes the projection by ${((factor-1)*100).toFixed(1)}%, shrunk toward league average. ${h2h.length?`Against this opponent: ${h2h.length} games, ${average(h2h.map(r=>Number(r[metric+3]))).toFixed(1)} average; shown as context, not an extra small-sample boost.`:'No earlier opponent matchup; no head-to-head boost.'} The fixed lower-quartile milestone gives ${(probability*100).toFixed(1)}% conditional chance.`,warnings});
+    candidates.push({id:`${fixture.id}:${member.id}:${metric}${quote?`:${quote.side}:${quote.line}`:''}`,...quote?{side:quote.side,quote}:{},playerId:member.id,player:member.name,team,opponent,metric,stat:data.metrics[metric],threshold,label:quote?`${member.name} ${quote.side==='over'?'Over':'Under'} ${threshold} ${data.metrics[metric].replaceAll('_',' ')}`:`${member.name} ${threshold}+ ${data.metrics[metric]}`,probability,mean:mean*factor*role,lastFive,currentMean:current.length?average(current.map(r=>Number(r[metric+3]))):null,currentGames:current.length,historyGames:logs.length,effectiveGames:effective,h2hGames:h2h.length,h2hMean:h2h.length?average(h2h.map(r=>Number(r[metric+3]))):null,opponentFactor:factor,roleFactor:role,projectedMinutes:minutes,reason:`${member.name} averaged ${mean.toFixed(1)} ${data.metrics[metric]} across ${logs.length} earlier ${sport==='wnba'?'regular-season/playoff':'regular-season'} games (recent games weighted more). Last five: ${lastFive.join(', ')}. Opponent team allowance changes the projection by ${((factor-1)*100).toFixed(1)}%, shrunk toward league average. ${h2h.length?`Against this opponent: ${h2h.length} games, ${average(h2h.map(r=>Number(r[metric+3]))).toFixed(1)} average; shown as context, not an extra small-sample boost.`:'No earlier opponent matchup; no head-to-head boost.'} ${quote?`The exact copied FanDuel Ontario line is ${quote.side} ${threshold}. Adjusted historical production is rounded to integer counts before evaluating this half-point line.`:'The fixed lower-quartile milestone is set before the target search.'} This gives ${(probability*100).toFixed(1)}% conditional model chance.`,warnings:[...warnings,...quote?['Manually entered FanDuel Ontario line and individual price; not verified against a live quote feed. Individual prices do not determine the combined SGP price.']:[]]});
+    }
    }
   }
  }
@@ -99,7 +104,7 @@ export function correlationMatrix(data:SgpDataset,candidates:SgpCandidate[],befo
 function random(seed:number){let t=seed>>>0;return()=>{t+=0x6D2B79F5;let r=Math.imul(t^t>>>15,t|1);r^=r+Math.imul(r^r>>>7,r|61);return ((r^r>>>14)>>>0)/4294967296;};}
 export function simulationMasks(candidates:SgpCandidate[],L:number[][],samples=65536,seed=27941){
  const rnd=random(seed),n=candidates.length,masks=candidates.map(()=>new Uint32Array(Math.ceil(samples/32))),z=new Float64Array(n);
- for(let s=0;s<samples;s++){for(let i=0;i<n;i+=2){const radius=Math.sqrt(-2*Math.log(Math.max(1e-12,rnd()))),theta=2*Math.PI*rnd();z[i]=radius*Math.cos(theta);if(i+1<n)z[i+1]=radius*Math.sin(theta);}for(let i=0;i<n;i++){let value=0;for(let j=0;j<=i;j++)value+=L[i][j]*z[j];if(normalCdf(value)<=candidates[i].probability)masks[i][s>>>5]|=1<<(s&31);}}
+ for(let s=0;s<samples;s++){for(let i=0;i<n;i+=2){const radius=Math.sqrt(-2*Math.log(Math.max(1e-12,rnd()))),theta=2*Math.PI*rnd();z[i]=radius*Math.cos(theta);if(i+1<n)z[i+1]=radius*Math.sin(theta);}for(let i=0;i<n;i++){let value=0;for(let j=0;j<=i;j++)value+=L[i][j]*z[j];if(candidates[i].side==='under'?normalCdf(value)>=1-candidates[i].probability:normalCdf(value)<=candidates[i].probability)masks[i][s>>>5]|=1<<(s&31);}}
  return masks;
 }
 function popcount(v:number){v-=v>>>1&0x55555555;v=(v&0x33333333)+(v>>>2&0x33333333);return ((v+(v>>>4)&0x0F0F0F0F)*0x01010101)>>>24;}
@@ -112,6 +117,7 @@ export function jointSummary(indices:number[],candidates:SgpCandidate[],masks:Ui
 export function compatibleProps(a:SgpCandidate,b:SgpCandidate,sport:SgpModelSport){
  if(a.id===b.id)return false;if(a.playerId!==b.playerId)return true;
  if(a.metric===b.metric)return false;
+ if((a.quote||b.quote)&&a.playerId===b.playerId){const pair=[a.metric,b.metric];if((sport!=='nfl'&&pair.includes(0)&&pair.includes(3))||(sport==='nfl'&&pair.includes(2)&&pair.includes(3)))return false;}
  // Do not charge probability twice for logically nested milestones.
  if(sport==='nfl'&&((a.metric===3&&a.threshold===1&&b.metric===2&&b.threshold>0)||(b.metric===3&&b.threshold===1&&a.metric===2&&a.threshold>0)))return false;
  if(sport!=='nfl'&&((a.metric===0&&b.metric===3&&a.threshold<=3*b.threshold)||(b.metric===0&&a.metric===3&&b.threshold<=3*a.threshold)))return false;
@@ -124,34 +130,43 @@ export function suggestedSgps(data:SgpDataset,candidates:SgpCandidate[],before:s
   // Greedy research search: append the supported leg that preserves the greatest
   // joint chance. Candidate thresholds never change in response to the target.
   // No claim that a greedy subset search is a global optimum.
-  while(indices.length<candidates.length&&hits/65536>target){let best=-1,bestHits=-1;for(let i=0;i<candidates.length;i++){if(indices.includes(i)||indices.some(j=>!compatibleProps(candidates[i],candidates[j],sport)))continue;const count=maskHits([...indices,i],masks);if(id==='40'&&count/65536<1/max)continue;if(count>bestHits&&count<hits){best=i;bestHits=count;}}if(best<0)break;indices.push(best);hits=bestHits;}
+  while(indices.length<Math.min(candidates.length,SGP_GAME_MAX_LEGS)&&hits/65536>target){let best=-1,bestHits=-1;for(let i=0;i<candidates.length;i++){if(indices.includes(i)||indices.some(j=>!compatibleProps(candidates[i],candidates[j],sport)))continue;const count=maskHits([...indices,i],masks);if(id==='40'&&count/65536<1/max)continue;if(count>bestHits&&count<hits){best=i;bestHits=count;}}if(best<0)break;indices.push(best);hits=bestHits;}
   const joint=indices.length?jointSummary(indices,candidates,masks,correlation):null,odds=joint?.fairOdds,targetReached=!!odds&&odds>=min&&odds<=max;
-  const reason=!indices.length?'No player milestones passed the history, role and availability checks.':targetReached?'Target reached using the fixed, data-supported milestones. Joint chance includes measured and shrunk game-level dependencies.':`Target not reached with the supported player milestones${joint?.unresolved?'; too few simulated joint successes for a stable price':''}. No tougher line or low-probability leg was added to force the target.`;
+  const reason=!indices.length?'No player milestones passed the history, role and availability checks.':targetReached?'Target reached using the fixed, data-supported milestones. Joint chance includes measured and shrunk game-level dependencies.':`Target not reached with the supported player milestones inside the ${SGP_GAME_MAX_LEGS}-prop cap${joint?.unresolved?'; too few simulated joint successes for a stable price':''}. No tougher line or low-probability leg was added to force the target.`;
   return {id,title:id==='40'?'40–60 odds':'Jackpot · 1000+',legs:indices.map(i=>candidates[i]),joint,targetReached,reason} satisfies SgpSuggestion;
  });
 }
 export function sgpPrefixes(data:SgpDataset,candidates:SgpCandidate[],before:string,sport:SgpModelSport){
  const correlation=correlationMatrix(data,candidates,before,sport),masks=simulationMasks(candidates,correlation.L),indices:number[]=[],prefixes:SgpPrefixSet['prefixes']=[];let hits=65536;
- while(indices.length<candidates.length){let best=-1,bestHits=-1;for(let i=0;i<candidates.length;i++){if(indices.includes(i)||indices.some(j=>!compatibleProps(candidates[i],candidates[j],sport)))continue;const count=maskHits([...indices,i],masks);if(count>bestHits&&count<hits){best=i;bestHits=count;}}if(best<0)break;indices.push(best);hits=bestHits;const joint=jointSummary(indices,candidates,masks,correlation);if(joint.unresolved)break;prefixes.push({indices:[...indices],joint});}
+ while(indices.length<Math.min(candidates.length,SGP_GAME_MAX_LEGS)){let best=-1,bestHits=-1;for(let i=0;i<candidates.length;i++){if(indices.includes(i)||indices.some(j=>!compatibleProps(candidates[i],candidates[j],sport)))continue;const count=maskHits([...indices,i],masks);if(count>bestHits&&count<hits){best=i;bestHits=count;}}if(best<0)break;indices.push(best);hits=bestHits;const joint=jointSummary(indices,candidates,masks,correlation);if(joint.unresolved)break;prefixes.push({indices:[...indices],joint});}
  return prefixes;
 }
-export function aggregateSgps(sets:SgpPrefixSet[],pool:SgpPool='both'):DailySgpSuggestion[]{
- const unique=[...new Map(sets.filter(s=>inSgpPool(s.fixture.sport,pool)).map(s=>({...s,prefixes:s.prefixes.filter(p=>!p.joint.unresolved&&p.joint.probability>0&&p.joint.probability<1&&p.joint.fairOdds!==null&&Number.isFinite(p.joint.fairOdds)&&p.joint.fairOdds>1&&new Set(p.indices).size===p.indices.length&&p.indices.every(i=>i>=0&&i<s.candidates.length))})).map(s=>[`${s.fixture.sport}:${s.fixture.id}`,s])).values()];
- return (['40','jackpot'] as const).map(id=>{
-  const min=id==='40'?40:1000,max=id==='40'?60:Infinity,minimum=Math.log(min),maximum=Math.log(max),width=.002;
-  type State={cost:number;probability:number;choices:{game:number;prefix:number}[]};let states=new Map<number,State>([[0,{cost:0,probability:1,choices:[]}]]),best:State|null=null;
+export const COMBINED_SGP_PROFILES=[{id:'20',min:20,max:21},{id:'50',min:50,max:52.5},{id:'200',min:200,max:210},{id:'jackpot',min:1000,max:Infinity}] as const;
+type CombinedProfile={id:DailySgpProfile;min:number;max:number};
+export function aggregateSgps(sets:SgpPrefixSet[],pool:SgpPool='both',profiles:readonly CombinedProfile[]=[{id:'40',min:40,max:60},{id:'jackpot',min:1000,max:Infinity}],minimumGroups=1):DailySgpSuggestion[]{
+ const unique=[...new Map(sets.filter(s=>inSgpPool(s.fixture.sport,pool)).map(s=>({...s,prefixes:s.prefixes.filter(p=>!p.joint.unresolved&&p.joint.probability>0&&p.joint.probability<1&&p.joint.fairOdds!==null&&Number.isFinite(p.joint.fairOdds)&&p.joint.fairOdds>1&&p.indices.length>0&&p.indices.length<=SGP_GAME_MAX_LEGS&&new Set(p.indices).size===p.indices.length&&p.indices.every(i=>i>=0&&i<s.candidates.length))})).map(s=>[`${s.fixture.sport}:${s.fixture.id}`,s])).values()];
+ return profiles.map(({id,min,max})=>{
+  const minimum=Math.log(min),maximum=Math.log(max),width=.002;
+  type State={cost:number;probability:number;legs:number;choices:{game:number;prefix:number}[]};let states=new Map<number,State>([[0,{cost:0,probability:1,legs:0,choices:[]}]]),best:State|null=null;
   // Dynamic search over strongest compatible within-game prefixes. Bins bound
   // computation, not the number of games/legs. Exact products verify targets.
   for(let g=0;g<unique.length;g++){
    const next=new Map(states);for(const state of states.values())for(let p=0;p<unique[g].prefixes.length;p++){
     const joint=unique[g].prefixes[p].joint;if(joint.unresolved||!joint.fairOdds||joint.probability<=0||joint.probability>=1)continue;
-    const probability=state.probability*joint.probability,cost=-Math.log(probability);if(cost>maximum+1e-12||best&&cost>=best.cost)continue;
-    const value:State={cost,probability,choices:[...state.choices,{game:g,prefix:p}]},product=1/probability;
-    if(cost>=minimum&&product>=min&&product<=max){if(!best||cost<best.cost)best=value;continue;}
-    const bucket=Math.floor(cost/width),old=next.get(bucket);if(!old||cost<old.cost)next.set(bucket,value);
+    const probability=state.probability*joint.probability,cost=-Math.log(probability);if(cost>maximum+1e-12||best&&cost>best.cost+1e-12)continue;
+    const value:State={cost,probability,legs:state.legs+unique[g].prefixes[p].indices.length,choices:[...state.choices,{game:g,prefix:p}]},product=1/probability;
+    if(cost>=minimum&&product>=min&&product<=max&&value.choices.length>=minimumGroups){if(!best||cost<best.cost-1e-12||Math.abs(cost-best.cost)<1e-12&&value.legs<best.legs)best=value;continue;}
+    const bucket=Math.floor(cost/width),old=next.get(bucket);if(!old||cost<old.cost-1e-12||Math.abs(cost-old.cost)<1e-12&&value.legs<old.legs)next.set(bucket,value);
    }states=next;
   }
-  const choices=best?.choices||unique.flatMap((s,game)=>s.prefixes.length?[{game,prefix:s.prefixes.length-1}]:[]),groups=choices.map(c=>{const s=unique[c.game],p=s.prefixes[c.prefix];return {fixture:s.fixture,legs:p.indices.map(i=>s.candidates[i]),joint:p.joint};}),probability=groups.length?groups.reduce((p,g)=>p*g.joint.probability,1):null,fairOdds=probability&&Number.isFinite(1/probability)?1/probability:null,targetReached=!!best&&fairOdds!==null&&fairOdds>=min&&fairOdds<=max;
-  return {id,groups,probability,fairOdds,targetReached,reason:!groups.length?'No supported upcoming NBA/NFL player props on this date.':targetReached?'Daily target reached using the strongest supported per-game prefixes. Correlations stay inside each game; separate games are multiplied under an independence assumption.':'Target not reached with the supported fixed milestones. The available supported groups are shown; no harder line or low-probability prop was introduced.'};
+  const fallback=[...states.values()].filter(s=>s.choices.length>=minimumGroups).sort((a,b)=>b.cost-a.cost||a.choices.length-b.choices.length)[0],choices=best?.choices||fallback?.choices||[],groups=choices.map(c=>{const s=unique[c.game],p=s.prefixes[c.prefix];return {fixture:s.fixture,legs:p.indices.map(i=>s.candidates[i]),joint:p.joint};}),probability=groups.length?groups.reduce((p,g)=>p*g.joint.probability,1):null,fairOdds=probability&&Number.isFinite(1/probability)?1/probability:null,targetReached=!!best&&fairOdds!==null&&fairOdds>=min&&fairOdds<=max;
+  return {id,groups,probability,fairOdds,targetReached,reason:!groups.length?'No supported upcoming NBA/NFL player props on this date.':targetReached?'Daily target reached using the strongest supported per-game groups. Every game uses no more than 10 props; fewer are valid. Correlations stay inside each game; separate games are multiplied under an independence assumption.':'Target not reached with supported per-game groups that use no more than 10 props. The strongest eligible groups are shown; no harder line or low-probability prop was introduced.'};
  });
+}
+
+// Automatic combined slips use only supported, compatible multi-prop game groups.
+// Prices remain explicitly model estimates until a sportsbook quote is available.
+export function combinedSgpSlips(sets:SgpPrefixSet[],pool:SgpPool='nba'):DailySgpSuggestion[]{
+ const eligible=sets.filter(s=>inSgpPool(s.fixture.sport,pool)).map(s=>({...s,prefixes:s.prefixes.filter(p=>p.indices.length>=2&&p.indices.length<=SGP_GAME_MAX_LEGS&&!p.joint.unresolved)}));
+ return aggregateSgps(eligible,pool,COMBINED_SGP_PROFILES,new Set(eligible.filter(s=>s.prefixes.length).map(s=>`${s.fixture.sport}:${s.fixture.id}`)).size>=2?2:1).map(s=>s.targetReached?s:{...s,groups:[],probability:null,fairOdds:null,reason:`No supported combination reaches the ${s.id==='jackpot'?'1000+':s.id} target within the 10-prop-per-game cap. Analysis remains available; another target is not relabeled or padded to fill this one.`});
 }
